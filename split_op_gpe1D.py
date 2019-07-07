@@ -10,10 +10,10 @@ class SplitOpGPE1D(object):
     """
     The second-order split-operator propagator of the 1D Schrodinger equation
     in the coordinate representation
-    with the time-dependent Hamiltonian H = K(p, t) + V(x, t).
+    with the time-dependent Hamiltonian H = K(p, t) + V(x, t) + g * abs(wavefunction) ** 2
     """
 
-    def __init__(self, *, x_grid_dim, x_amplitude, v, k, dt,
+    def __init__(self, *, x_grid_dim, x_amplitude, v, k, dt, g,
                  epsilon=1e-1, diff_k=None, diff_v=None, t=0, abs_boundary=1., **kwargs):
         """
         :param x_grid_dim: the grid size
@@ -24,6 +24,7 @@ class SplitOpGPE1D(object):
         :param diff_v: the derivative of the kinetic energy for the Ehrenfest theorem calculations
         :param t: initial value of time
         :param dt: initial time increment
+        :param g: the coupling constant
         :param epsilon: relative error tolerance
         :param abs_boundary: absorbing boundary
         :param kwargs: ignored
@@ -37,6 +38,7 @@ class SplitOpGPE1D(object):
         self.diff_v = diff_v
         self.t = t
         self.dt = dt
+        self.g = g
         self.epsilon = epsilon
         self.abs_boundary = abs_boundary
 
@@ -46,7 +48,7 @@ class SplitOpGPE1D(object):
             "A value of the grid size (x_grid_dim) must be a power of 2"
 
         # get coordinate step size
-        self.dx = 2. * self.x_amplitude / self.x_grid_dim
+        dx = self.dx = 2. * self.x_amplitude / self.x_grid_dim
 
         # generate coordinate range
         x = self.x = (np.arange(self.x_grid_dim) - self.x_grid_dim / 2) * self.dx
@@ -87,7 +89,7 @@ class SplitOpGPE1D(object):
             function to efficiently evaluate
                 wavefunction *= (-1) ** k * exp(-0.5j * dt * v)
             """
-            wavefunction *= abs_boundary * np.exp(-0.5j * dt * v(x, t + 0.5 * dt))
+            wavefunction *= abs_boundary * np.exp(-0.5j * dt * (v(x, t + 0.5 * dt) + g * np.abs(wavefunction) ** 2))
 
         self.expV = expV
 
@@ -119,7 +121,7 @@ class SplitOpGPE1D(object):
 
             @njit
             def get_v_average(density, t):
-                return np.sum(v(x, t) * density)
+                return np.sum((v(x, t) + 0.5 * g * density / dx) * density)
 
             self.get_v_average = get_v_average
 
@@ -231,8 +233,8 @@ class SplitOpGPE1D(object):
             e_n_1 = (e_n_1 if e_n_1 else e_n)
             e_n_2 = (e_n_2 if e_n_2 else e_n)
 
-            # self.dt *= (e_n_1 / e_n) ** 0.075 * (self.epsilon / e_n) ** 0.175 * (e_n_1 ** 2 / e_n / e_n_2) ** 0.01
-            self.dt *= (self.epsilon ** 2 / e_n / e_n_1 * previous_dt / self.dt) ** (1 / 12.)
+            self.dt *= (e_n_1 / e_n) ** 0.075 * (self.epsilon / e_n) ** 0.175 * (e_n_1 ** 2 / e_n / e_n_2) ** 0.01
+            # self.dt *= (self.epsilon ** 2 / e_n / e_n_1 * previous_dt / self.dt) ** (1 / 12.)
 
             # update the error estimates in order to go next to the next step
             e_n_2, e_n_1 = e_n_1, e_n

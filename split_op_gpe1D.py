@@ -4,17 +4,103 @@ from scipy import linalg  # Linear algebra for dense matrix
 from numba import njit
 from numba.targets.registry import CPUDispatcher
 from types import FunctionType
+from functools import partial
+
+def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, epsilon=1e-5, t=0, abs_boundary=1., **kwargs):
+    """
+    Imaginary time propagator to get the ground state
+
+    :param x_grid_dim: the grid size
+    :param x_amplitude: the maximum value of the coordinates
+    :param v: the potential energy (as a function)
+    :param k: the kinetic energy (as a function)
+    :param t: initial value of time
+    :param dt: initial time increment
+    :param g: the coupling constant
+    :param epsilon: relative error tolerance
+    :param abs_boundary: absorbing boundary
+    :param kwargs: ignored
+
+    :return: wavefunction
+    """
+
+    # Check that all attributes were specified
+    # make sure self.x_amplitude has a value of power of 2
+    assert 2 ** int(np.log2(x_grid_dim)) == x_grid_dim, \
+        "A value of the grid size (x_grid_dim) must be a power of 2"
+
+    # get coordinate step size
+    dx = 2. * x_amplitude / x_grid_dim
+
+    # generate coordinate range
+    x = (np.arange(x_grid_dim) - x_grid_dim / 2) * dx
+
+    # generate momentum range as it corresponds to FFT frequencies
+    p = (np.arange(x_grid_dim) - x_grid_dim / 2) * (np.pi / x_amplitude)
+
+    # evaluate the potential energy
+    v = partial(v, t=0)(x)
+    v -= v.min()
+
+    # evaluate the kinetic energy
+    k = partial(k, t=0)(p)
+    k -= k.min()
+
+    # pre-calculate the absorbing potential and the sequence of alternating signs
+    abs_boundary = (abs_boundary if isinstance(abs_boundary, (float, int)) else abs_boundary(x))
+
+    # precalucate the exponent of the potential and kinetic energy
+    img_exp_v = (-1) ** np.arange(x.size) * abs_boundary * np.exp(-0.5 * dt * v)
+    img_exp_k = np.exp(-dt * k)
+
+    # initial guess for the wave function
+    wavefunction = np.exp(-x ** 2) + 0j
+
+    # extra copy of the wavefunction
+    wavefunction_next = np.ones_like(wavefunction)
+
+    # reaped until converged
+    while linalg.norm(wavefunction_next - wavefunction) / linalg.norm(wavefunction_next) > epsilon:
+
+        wavefunction_next, wavefunction = wavefunction, wavefunction_next
+
+        wavefunction_next *= img_exp_v
+        wavefunction_next /= linalg.norm(wavefunction_next) * np.sqrt(dx)
+        wavefunction_next *= np.exp(-0.5 * dt * g * np.abs(wavefunction_next) ** 2)
+
+        # going to the momentum representation
+        wavefunction_next = fftpack.fft(wavefunction_next, overwrite_x=True)
+
+        wavefunction_next *= img_exp_k
+
+        # going back to the coordinate representation
+        wavefunction_next = fftpack.ifft(wavefunction_next, overwrite_x=True)
+
+        wavefunction_next *= img_exp_v
+        wavefunction_next /= linalg.norm(wavefunction_next) * np.sqrt(dx)
+        wavefunction_next *= np.exp(-0.5 * dt * g * np.abs(wavefunction_next) ** 2)
+
+        wavefunction_next /= linalg.norm(wavefunction_next) * np.sqrt(dx)
+
+    return wavefunction_next
+
+########################################################################################################################
+#
+#
+#
+########################################################################################################################
 
 
 class SplitOpGPE1D(object):
     """
-    The second-order split-operator propagator of the 1D Schrodinger equation
-    in the coordinate representation
-    with the time-dependent Hamiltonian H = K(p, t) + V(x, t) + g * abs(wavefunction) ** 2
-    """
+    The second-order split-operator propagator of the 1D Gross–Pitaevskii equation in the coordinate representation
+    with the time-dependent Hamiltonian
 
+        H = K(p, t) + V(x, t) + g * abs(wavefunction) ** 2
+
+    """
     def __init__(self, *, x_grid_dim, x_amplitude, v, k, dt, g,
-                 epsilon=1e-1, diff_k=None, diff_v=None, t=0, abs_boundary=1., **kwargs):
+                 epsilon=1e-2, diff_k=None, diff_v=None, t=0, abs_boundary=1., **kwargs):
         """
         :param x_grid_dim: the grid size
         :param x_amplitude: the maximum value of the coordinates
@@ -233,8 +319,13 @@ class SplitOpGPE1D(object):
             e_n_1 = (e_n_1 if e_n_1 else e_n)
             e_n_2 = (e_n_2 if e_n_2 else e_n)
 
-            self.dt *= (e_n_1 / e_n) ** 0.075 * (self.epsilon / e_n) ** 0.175 * (e_n_1 ** 2 / e_n / e_n_2) ** 0.01
-            # self.dt *= (self.epsilon ** 2 / e_n / e_n_1 * previous_dt / self.dt) ** (1 / 12.)
+            # the adaptive time stepping method from
+            #   http://www.mathematik.uni-dortmund.de/~kuzmin/cfdintro/lecture8.pdf
+            # self.dt *= (e_n_1 / e_n) ** 0.075 * (self.epsilon / e_n) ** 0.175 * (e_n_1 ** 2 / e_n / e_n_2) ** 0.01
+
+            # the adaptive time stepping method from
+            #   https://linkinghub.elsevier.com/retrieve/pii/S0377042705001123
+            self.dt *= (self.epsilon ** 2 / e_n / e_n_1 * previous_dt / self.dt) ** (1 / 12.)
 
             # update the error estimates in order to go next to the next step
             e_n_2, e_n_1 = e_n_1, e_n

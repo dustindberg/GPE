@@ -1,12 +1,13 @@
 import numpy as np
 from scipy import fftpack  # Tools for fourier transform
-from scipy import linalg  # Linear algebra for dense matrix
-from numba import njit
+from numpy import linalg  # Linear algebra for dense matrix
+from numba import njit, jit
 from numba.targets.registry import CPUDispatcher
 from types import FunctionType
 from functools import partial
 
-def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, epsilon=1e-5, t=0, abs_boundary=1., **kwargs):
+
+def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, epsilon=1e-7, t=0, abs_boundary=1., **kwargs):
     """
     Imaginary time propagator to get the ground state
 
@@ -16,6 +17,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, epsilon=1e-5, t=0, 
     :param k: the kinetic energy (as a function)
     :param t: initial value of time
     :param dt: initial time increment
+    :param wavefunction: initial guess for wavefunction
     :param g: the coupling constant
     :param epsilon: relative error tolerance
     :param abs_boundary: absorbing boundary
@@ -23,6 +25,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, epsilon=1e-5, t=0, 
 
     :return: wavefunction
     """
+    print("\nStarting imaginary time propagation")
 
     # Check that all attributes were specified
     # make sure self.x_amplitude has a value of power of 2
@@ -40,11 +43,11 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, epsilon=1e-5, t=0, 
 
     # evaluate the potential energy
     v = partial(v, t=0)(x)
-    v -= v.min()
+    #v -= v.min()
 
     # evaluate the kinetic energy
     k = partial(k, t=0)(p)
-    k -= k.min()
+    #k -= k.min()
 
     # pre-calculate the absorbing potential and the sequence of alternating signs
     abs_boundary = (abs_boundary if isinstance(abs_boundary, (float, int)) else abs_boundary(x))
@@ -54,35 +57,74 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, epsilon=1e-5, t=0, 
     img_exp_k = np.exp(-dt * k)
 
     # initial guess for the wave function
-    wavefunction = np.exp(-x ** 2) + 0j
+    wavefunction = (np.exp(-v) + 0j if wavefunction is None else wavefunction)
 
-    # extra copy of the wavefunction
-    wavefunction_next = np.ones_like(wavefunction)
+    @njit
+    def exp_potential(psi):
+        """
+        Modulate the wavefunction with the nonlinear interaction potential in GPE
+        :param psi: wavefunction
+        :return: None
+        """
+        psi *= img_exp_v
+        psi /= linalg.norm(psi) * np.sqrt(dx)
+        psi *= np.exp(-0.5 * dt * g * np.abs(psi) ** 2)
 
-    # reaped until converged
-    while linalg.norm(wavefunction_next - wavefunction) / linalg.norm(wavefunction_next) > epsilon:
+    @jit
+    def get_energy(psi):
+        """
+        Calculate the energy for a given wave function
+        :return: float
+        """
+        density = np.abs(psi) ** 2
+        density /= density.sum()
 
-        wavefunction_next, wavefunction = wavefunction, wavefunction_next
+        energy = np.sum((v + 0.5 * g * density / dx) * density)
 
-        wavefunction_next *= img_exp_v
-        wavefunction_next /= linalg.norm(wavefunction_next) * np.sqrt(dx)
-        wavefunction_next *= np.exp(-0.5 * dt * g * np.abs(wavefunction_next) ** 2)
+        # get momentum density
+        density = np.abs(
+            fftpack.fft((-1) ** np.arange(x_grid_dim) * psi, overwrite_x=True)
+        ) ** 2
+        density /= density.sum()
+
+        energy += np.sum(k * density)
+
+        return energy
+
+    counter = 0
+    energy = -np.infty
+    energy_previous = 1
+
+    # reaped until energy increases or convergence
+    while (energy_previous > energy) or (1 - energy / energy_previous > epsilon):
+
+        exp_potential(wavefunction)
 
         # going to the momentum representation
-        wavefunction_next = fftpack.fft(wavefunction_next, overwrite_x=True)
+        wavefunction = fftpack.fft(wavefunction, overwrite_x=True)
 
-        wavefunction_next *= img_exp_k
+        wavefunction *= img_exp_k
 
         # going back to the coordinate representation
-        wavefunction_next = fftpack.ifft(wavefunction_next, overwrite_x=True)
+        wavefunction = fftpack.ifft(wavefunction, overwrite_x=True)
 
-        wavefunction_next *= img_exp_v
-        wavefunction_next /= linalg.norm(wavefunction_next) * np.sqrt(dx)
-        wavefunction_next *= np.exp(-0.5 * dt * g * np.abs(wavefunction_next) ** 2)
+        exp_potential(wavefunction)
 
-        wavefunction_next /= linalg.norm(wavefunction_next) * np.sqrt(dx)
+        wavefunction /= linalg.norm(wavefunction) * np.sqrt(dx)
 
-    return wavefunction_next
+        # calculate the energy
+        energy_previous = energy
+        energy = get_energy(wavefunction)
+
+        # print progress report
+        if counter % 2000 == 0:
+            print("current ground state energy = {:.4e}".format(energy))
+
+        counter += 1
+
+    print("\n\nFinal current ground state energy = {:.4e}".format(energy))
+
+    return wavefunction
 
 ########################################################################################################################
 #

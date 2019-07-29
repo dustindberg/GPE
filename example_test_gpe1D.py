@@ -52,19 +52,17 @@ for omega in [4.,]:
         g=1000,
 
         # epsilon=1e-2,
-
-        dt=0.001,
     )
 
     ##################################################################################################
 
     # create the harmonic oscillator with time-independent hamiltonian
-    harmonic_osc = SplitOpGPE1D(**harmonic_osc_params)
+    harmonic_osc = SplitOpGPE1D(dt=0.001, **harmonic_osc_params)
 
     # set the initial condition
     harmonic_osc.set_wavefunction(
         #lambda x: np.exp(-1 * (x - 0.2) ** 2)
-        imag_time_gpe1D(**harmonic_osc_params)
+        imag_time_gpe1D(dt=1e-5, **harmonic_osc_params)
     )
 
     # get time duration of 6 periods

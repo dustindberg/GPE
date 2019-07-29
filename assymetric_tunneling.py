@@ -14,13 +14,7 @@ def v(x, t=0.):
     """
     Potential energy
     """
-    # asymmetric barrier
-    potential = 400. * x ** 2 * np.exp(-0.3 * x ** 2)
-    potential[:int(potential.size / 2)] = 0
-
-    # trapping potential
-    potential += 0.5 * (omega * x) ** 2
-    return potential
+    return 0.5 * (omega * x) ** 2 + 400. * x ** 2 * np.exp(-0.3 * x ** 2) * (x < 0)
 
 
 @njit
@@ -28,7 +22,7 @@ def diff_v(x, t=0.):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
-    return (omega) ** 2 * x
+    return (omega) ** 2 * x + (2. * x - 0.6 * x ** 3) * 400. * np.exp(-0.3 * x ** 2) * (x < 0)
 
 
 @njit
@@ -49,8 +43,8 @@ def k(p, t=0.):
 
 # save parameters as a separate bundle
 params = dict(
-    x_grid_dim=2 * 1024,
-    x_amplitude=45.,
+    x_grid_dim=4 * 1024,
+    x_amplitude=60.,
 
     k=k,
 
@@ -152,7 +146,7 @@ def analyze_propagation(qsys, wavefunctions, title):
         origin='lower',
         extent=extent,
         aspect=(extent[1] - extent[0]) / (extent[-1] - extent[-2]),
-        #norm=SymLogNorm(vmin=1e-13, vmax=1., linthresh=1e-15)
+        norm=SymLogNorm(vmin=1e-13, vmax=1., linthresh=1e-15)
     )
     plt.xlabel('coordinate $x$ (a.u.)')
     plt.ylabel('time $t$ (a.u.)')
@@ -320,7 +314,7 @@ analyze_propagation(schrodinger_qsys, schrodinger_wavefunctions, "Schrodinger ev
 # Analyze the Flipped schrodinger propagation
 analyze_propagation(
     flipped_schrodinger_qsys,
-    [psi[::-1] for psi in flipped_schrodinger_wavefunctions],
+    flipped_schrodinger_wavefunctions, # [psi[::-1] for psi in flipped_schrodinger_wavefunctions],
     "Flipped Schrodinger evolution"
 )
 
@@ -330,7 +324,7 @@ analyze_propagation(gpe_qsys, gpe_wavefunctions, "GPE evolution")
 # Analyze the Flipped GPE propagation
 analyze_propagation(
     flipped_gpe_qsys,
-    [psi[::-1] for psi in flipped_gpe_wavefunctions],
+    flipped_gpe_wavefunctions, # [psi[::-1] for psi in flipped_gpe_wavefunctions],
     "Flipped GPE evolution"
 )
 
@@ -340,18 +334,19 @@ analyze_propagation(
 #
 ########################################################################################################################
 
-x_cut = int(0.6 * schrodinger_wavefunctions[0].size)
-x_cut_flipped = int(0.4 * schrodinger_wavefunctions[0].size)
+dx = gpe_qsys.dx
+x_cut = int(0.6 * gpe_qsys.wavefunction.size)
+x_cut_flipped = int(0.4 * gpe_qsys.wavefunction.size)
 
 plt.subplot(121)
 plt.plot(
     times,
-    np.sum(np.abs(schrodinger_wavefunctions)[:, x_cut:] ** 2, axis=1),
+    np.sum(np.abs(schrodinger_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
     label='Schrodinger'
 )
 plt.plot(
     times,
-    np.sum(np.abs(flipped_schrodinger_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1),
+    np.sum(np.abs(flipped_schrodinger_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1) * dx,
     label='Flipped Schrodinger'
 )
 plt.legend()
@@ -361,16 +356,29 @@ plt.ylabel("transmission probability")
 plt.subplot(122)
 plt.plot(
     times,
-    np.sum(np.abs(gpe_wavefunctions)[:, x_cut:] ** 2, axis=1),
+    np.sum(np.abs(gpe_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
     label='GPE'
 )
 plt.plot(
     times,
-    np.sum(np.abs(flipped_gpe_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1),
+    np.sum(np.abs(flipped_gpe_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1) * dx,
     label='Flipped GPE'
 )
 plt.legend()
 plt.xlabel("time")
 plt.ylabel("transmission probability")
 
+plt.show()
+
+########################################################################################################################
+#
+# Plot the potential
+#
+########################################################################################################################
+
+plt.title('Potential')
+x = gpe_qsys.x
+plt.plot(x, v(x))
+plt.xlabel('$x$ (a.u.)')
+plt.ylabel('$v(x)$ (a.u.)')
 plt.show()

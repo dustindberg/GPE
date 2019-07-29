@@ -43,11 +43,11 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, 
 
     # evaluate the potential energy
     v = partial(v, t=0)(x)
-    #v -= v.min()
+    v -= v.min()
 
     # evaluate the kinetic energy
     k = partial(k, t=0)(p)
-    #k -= k.min()
+    k -= k.min()
 
     # pre-calculate the absorbing potential and the sequence of alternating signs
     abs_boundary = (abs_boundary if isinstance(abs_boundary, (float, int)) else abs_boundary(x))
@@ -142,14 +142,17 @@ class SplitOpGPE1D(object):
 
     """
     def __init__(self, *, x_grid_dim, x_amplitude, v, k, dt, g,
-                 epsilon=1e-2, diff_k=None, diff_v=None, t=0, abs_boundary=1., **kwargs):
+                 epsilon=1e-2, diff_k=None, diff_v=None, t=0, abs_boundary=1.,
+                 time_independent_v=True, time_independent_k=True, **kwargs):
         """
         :param x_grid_dim: the grid size
         :param x_amplitude: the maximum value of the coordinates
         :param v: the potential energy (as a function)
         :param k: the kinetic energy (as a function)
         :param diff_k: the derivative of the potential energy for the Ehrenfest theorem calculations
+        :param time_independent_v: boolean flag indicated weather potential is time dependent (default is True)
         :param diff_v: the derivative of the kinetic energy for the Ehrenfest theorem calculations
+        :param time_independent_k: boolean flag indicated weather kinetic energy is time dependent (default is True)
         :param t: initial value of time
         :param dt: initial time increment
         :param g: the coupling constant
@@ -210,6 +213,22 @@ class SplitOpGPE1D(object):
 
         abs_boundary = (abs_boundary if isinstance(abs_boundary, (float, int)) else abs_boundary(x))
         abs_boundary = (-1) ** np.arange(self.wavefunction.size) * abs_boundary
+
+        # Cache the potential if it does not depend on time
+        if time_independent_v:
+            pre_calculated_v = v(x, 0.)
+            v = njit(lambda _, __: pre_calculated_v)
+
+            pre_calculated_diff_v = diff_v(x, 0.)
+            diff_v = njit(lambda _, __: pre_calculated_diff_v)
+
+        # Cache the kinetic energy if it does not depend on time
+        if time_independent_k:
+            pre_calculated_k = k(p, 0.)
+            k = njit(lambda _, __: pre_calculated_k)
+
+            pre_calculated_diff_k = diff_k(p, 0.)
+            diff_k = njit(lambda _, __: pre_calculated_diff_k)
 
         @njit
         def expV(wavefunction, t, dt):

@@ -5,16 +5,19 @@ import numpy as np
 from scipy.interpolate import UnivariateSpline
 from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D # class for the split operator propagation
 
-omega = 1.5
-g = 1000
+g = 2194.449140
 propagation_dt = 1e-4
+
+hight_assymetric = 1e2
+
+delta = 4.
 
 @njit
 def v(x, t=0.):
     """
     Potential energy
     """
-    return 0.5 * (omega * x) ** 2 + 400. * x ** 2 * np.exp(-0.3 * x ** 2) * (x < 0)
+    return 0.5 * x ** 2 + hight_assymetric * x ** 2 * np.exp(-(x / delta) ** 2) * (x < 0)
 
 
 @njit
@@ -22,7 +25,7 @@ def diff_v(x, t=0.):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
-    return (omega) ** 2 * x + (2. * x - 0.6 * x ** 3) * 400. * np.exp(-0.3 * x ** 2) * (x < 0)
+    return x + (2. * x - 2. * delta ** (-2) * x ** 3) * hight_assymetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
 
 @njit
@@ -43,8 +46,8 @@ def k(p, t=0.):
 
 # save parameters as a separate bundle
 params = dict(
-    x_grid_dim=4 * 1024,
-    x_amplitude=60.,
+    x_grid_dim=8 * 1024,
+    x_amplitude=90.,
 
     k=k,
 
@@ -53,6 +56,7 @@ params = dict(
 
     # epsilon=1e-2,
 )
+
 
 ########################################################################################################################
 #
@@ -67,14 +71,15 @@ def initial_trap(x, t=0):
     :param x:
     :return:
     """
-    return 0.5 * (8 * (x + 15.)) ** 2
+    # omega = 2 * Pi * 100Hz
+    return 12.5 * (x + 20.) ** 2
 
 
 init_state = imag_time_gpe1D(
     v=initial_trap,
     g=g,
-    dt=1e-4,
-    epsilon=1e-7,
+    dt=1e-3,
+    epsilon=1e-8,
     **params
 )
 
@@ -83,7 +88,7 @@ init_state = imag_time_gpe1D(
     g=g,
     v=initial_trap,
     dt=1e-5,
-    epsilon=1e-14,
+    epsilon=1e-10,
     **params
 )
 
@@ -92,8 +97,8 @@ flipped_initial_trap = njit(lambda x, t: initial_trap(-x, t))
 flipped_init_state = imag_time_gpe1D(
     v=flipped_initial_trap,
     g=g,
-    dt=1e-4,
-    epsilon=1e-7,
+    dt=1e-3,
+    epsilon=1e-8,
     **params
 )
 
@@ -102,23 +107,27 @@ flipped_init_state = imag_time_gpe1D(
     g=g,
     v=flipped_initial_trap,
     dt=1e-5,
-    epsilon=1e-14,
+    epsilon=1e-10,
     **params
 )
 
+qsys = SplitOpGPE1D(
+    v=initial_trap,
+    g=g,
+    dt=1e-3,
+    **params
+).set_wavefunction(init_state)
+test_init_state = qsys.propagate(0.05)
 
-# qsys = SplitOpGPE1D(
-#     v=initial_trap,
-#     g=g,
-#     dt=1e-3,
-#     **params
-# ).set_wavefunction(init_state)
-# test_init_state = qsys.propagate(0.5)
-#
-# plt.semilogy(qsys.x, np.abs(init_state), label='initial condition')
-# plt.semilogy(qsys.x, np.abs(test_init_state), label='propagated init condition')
-# plt.legend()
-# plt.show()
+x = qsys.x
+plt.semilogy(x, np.abs(init_state), label='initial condition')
+plt.semilogy(x, np.abs(test_init_state), label='propagated init condition')
+
+plt.semilogy(x, v(x))
+plt.xlabel('$x$')
+plt.ylabel('$v(x)$')
+plt.legend()
+plt.show()
 
 ########################################################################################################################
 #
@@ -204,6 +213,7 @@ def analyze_propagation(qsys, wavefunctions, title):
             100. * (1. - h.min() / h.max())
         )
     )
+    print("Initial energy {:.4e}".format(h[0]))
 
     plt.plot(times, h)
     plt.ylabel('energy')
@@ -233,14 +243,16 @@ gpe_qsys = SplitOpGPE1D(
     **params
 ).set_wavefunction(init_state)
 
-# get time duration of 6 periods
-T = 2 * 2. * np.pi / omega
-times = np.arange(0, T, 50 * gpe_qsys.dt)
+# get time duration of 2 periods
+T = 1. * 2. * np.pi
+times = np.linspace(0, T, 500)
 
 # propagate till time T and for each time step save a probability density
 gpe_wavefunctions = [
      gpe_qsys.propagate(t).copy() for t in times
 ]
+
+analyze_propagation(gpe_qsys, gpe_wavefunctions, "GPE evolution")
 
 ########################################################################################################################
 #
@@ -379,6 +391,6 @@ plt.show()
 plt.title('Potential')
 x = gpe_qsys.x
 plt.plot(x, v(x))
-plt.xlabel('$x$ (a.u.)')
-plt.ylabel('$v(x)$ (a.u.)')
+plt.xlabel('$x / 2.4\mu m$ ')
+plt.ylabel('$v(x)$')
 plt.show()

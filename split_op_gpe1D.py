@@ -92,11 +92,11 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, 
         return energy
 
     counter = 0
-    energy = -np.infty
-    energy_previous = 1
+    energy = 0
+    energy_previous = np.infty
 
     # reaped until energy increases or convergence
-    while (energy_previous > energy) or (1 - energy / energy_previous > epsilon):
+    while (energy_previous > energy) and (1 - energy / energy_previous > epsilon):
 
         exp_potential(wavefunction)
 
@@ -113,11 +113,12 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, 
         wavefunction /= linalg.norm(wavefunction) * np.sqrt(dx)
 
         # calculate the energy
-        energy_previous = energy
+        energy_previous = (energy if energy else np.infty)
         energy = get_energy(wavefunction)
 
         # print progress report
         if counter % 2000 == 0:
+
             print("current ground state energy = {:.4e}".format(energy))
 
         counter += 1
@@ -311,7 +312,7 @@ class SplitOpGPE1D(object):
             self.hamiltonian_average = []
 
             # Allocate array for storing coordinate or momentum density of the wavefunction
-            self.density = np.zeros(self.wavefunction.shape, dtype=np.float)
+            self.density = np.zeros_like(self.wavefunction)
 
             # sequence of alternating signs for getting the wavefunction in the momentum representation
             self.minus = (-1) ** np.arange(self.x_grid_dim)
@@ -436,36 +437,41 @@ class SplitOpGPE1D(object):
         Calculate observables entering the Ehrenfest theorems
         """
         if self.is_ehrenfest:
+            # alias
+            density = self.density
+
             # evaluate the coordinate density
-            np.abs(self.wavefunction, out=self.density)
-            self.density *= self.density
+            np.abs(self.wavefunction, out=density)
+            density *= density
             # normalize
-            self.density /= self.density.sum()
+            density /= density.sum()
 
             # save the current value of <x>
-            self.x_average.append(self.get_x_average(self.density))
+            self.x_average.append(self.get_x_average(density.real))
 
-            self.p_average_rhs.append(-self.get_p_average_rhs(self.density, self.t))
+            self.p_average_rhs.append(-self.get_p_average_rhs(density.real, self.t))
 
             # save the potential energy
-            self.hamiltonian_average.append(self.get_v_average(self.density, self.t))
+            self.hamiltonian_average.append(self.get_v_average(density.real, self.t))
 
             # calculate density in the momentum representation
-            wavefunction_p = fftpack.fft(self.minus * self.wavefunction, overwrite_x=True)
+            np.copyto(density, self.wavefunction)
+            density *= self.minus
+            density = fftpack.fft(density, overwrite_x=True)
 
             # get the density in the momentum space
-            np.abs(wavefunction_p, out=self.density)
-            self.density *= self.density
+            np.abs(density, out=density)
+            density *= density
             # normalize
-            self.density /= self.density.sum()
+            density /= density.sum()
 
             # save the current value of <p>
-            self.p_average.append(self.get_p_average(self.density))
+            self.p_average.append(self.get_p_average(density.real))
 
-            self.x_average_rhs.append(self.get_x_average_rhs(self.density, self.t))
+            self.x_average_rhs.append(self.get_x_average_rhs(density.real, self.t))
 
             # add the kinetic energy to get the hamiltonian
-            self.hamiltonian_average[-1] += self.get_k_average(self.density, self.t)
+            self.hamiltonian_average[-1] += self.get_k_average(density.real, self.t)
 
             # save the current time
             self.times.append(self.t)

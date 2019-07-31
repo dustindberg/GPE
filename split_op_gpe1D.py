@@ -4,10 +4,9 @@ from numpy import linalg  # Linear algebra for dense matrix
 from numba import njit, jit
 from numba.targets.registry import CPUDispatcher
 from types import FunctionType
-from functools import partial
 
 
-def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, epsilon=1e-7, t=0, abs_boundary=1., **kwargs):
+def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, epsilon=1e-7, abs_boundary=1., **kwargs):
     """
     Imaginary time propagator to get the ground state
 
@@ -15,7 +14,6 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, 
     :param x_amplitude: the maximum value of the coordinates
     :param v: the potential energy (as a function)
     :param k: the kinetic energy (as a function)
-    :param t: initial value of time
     :param dt: initial time increment
     :param wavefunction: initial guess for wavefunction
     :param g: the coupling constant
@@ -42,11 +40,11 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, 
     p = (np.arange(x_grid_dim) - x_grid_dim / 2) * (np.pi / x_amplitude)
 
     # evaluate the potential energy
-    v = partial(v, t=0)(x)
+    v = v(x, 0.)
     v -= v.min()
 
     # evaluate the kinetic energy
-    k = partial(k, t=0)(p)
+    k = k(p, 0.)
     k -= k.min()
 
     # pre-calculate the absorbing potential and the sequence of alternating signs
@@ -92,7 +90,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, 
         return energy
 
     counter = 0
-    energy = 0
+    energy = 0.
     energy_previous = np.infty
 
     # reaped until energy increases or convergence
@@ -112,8 +110,10 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, 
 
         wavefunction /= linalg.norm(wavefunction) * np.sqrt(dx)
 
-        # calculate the energy
+        # save previous energy
         energy_previous = (energy if energy else np.infty)
+
+        # calculate the energy
         energy = get_energy(wavefunction)
 
         # print progress report
@@ -129,9 +129,20 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, 
 
 ########################################################################################################################
 #
-#
+#   Class to perform the real time propagation of GPE
 #
 ########################################################################################################################
+
+
+@njit
+def relative_diff(psi_next, psi):
+    """
+    Efficiently calculate the relative difference of two wavefunctions. (Used in thea adaptive scheme)
+    :param psi_next: numpy.array
+    :param psi: numpy.array
+    :return: float
+    """
+    return linalg.norm(psi_next - psi) / linalg.norm(psi_next)
 
 
 class SplitOpGPE1D(object):
@@ -346,7 +357,7 @@ class SplitOpGPE1D(object):
             np.copyto(self.wavefunction_next, self.wavefunction)
             self.wavefunction_next = self.single_step_propagation(self.dt, self.wavefunction_next)
 
-            e_n = linalg.norm(self.wavefunction_next - self.wavefunction) / linalg.norm(self.wavefunction_next)
+            e_n = relative_diff(self.wavefunction_next, self.wavefunction)
 
             while e_n > self.epsilon:
                 # the error is to high, decrease the time step and propagate with the new time step
@@ -356,7 +367,7 @@ class SplitOpGPE1D(object):
                 np.copyto(self.wavefunction_next, self.wavefunction)
                 self.wavefunction_next = self.single_step_propagation(self.dt, self.wavefunction_next)
 
-                e_n = linalg.norm(self.wavefunction_next - self.wavefunction) / linalg.norm(self.wavefunction_next)
+                e_n = relative_diff(self.wavefunction_next, self.wavefunction)
 
             # accept the current wave function
             self.wavefunction, self.wavefunction_next = self.wavefunction_next, self.wavefunction

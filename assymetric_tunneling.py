@@ -10,14 +10,14 @@ propagation_dt = 1e-4
 
 hight_assymetric = 1e2
 
-delta = 4.
+delta = 3.5
 
 @njit
 def v(x, t=0.):
     """
     Potential energy
     """
-    return 0.5 * x ** 2 + hight_assymetric * x ** 2 * np.exp(-(x / delta) ** 2) * (x < 0)
+    return 0.5 * x ** 2 + x ** 2 * hight_assymetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
 
 @njit
@@ -25,7 +25,7 @@ def diff_v(x, t=0.):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
-    return x + (2. * x - 2. * delta ** (-2) * x ** 3) * hight_assymetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * hight_assymetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
 
 @njit
@@ -46,8 +46,8 @@ def k(p, t=0.):
 
 # save parameters as a separate bundle
 params = dict(
-    x_grid_dim=8 * 1024,
-    x_amplitude=90.,
+    x_grid_dim=32 * 1024,
+    x_amplitude=80.,
 
     k=k,
 
@@ -111,23 +111,23 @@ flipped_init_state = imag_time_gpe1D(
     **params
 )
 
-qsys = SplitOpGPE1D(
-    v=initial_trap,
-    g=g,
-    dt=1e-3,
-    **params
-).set_wavefunction(init_state)
-test_init_state = qsys.propagate(0.05)
-
-x = qsys.x
-plt.semilogy(x, np.abs(init_state), label='initial condition')
-plt.semilogy(x, np.abs(test_init_state), label='propagated init condition')
-
-plt.semilogy(x, v(x))
-plt.xlabel('$x$')
-plt.ylabel('$v(x)$')
-plt.legend()
-plt.show()
+# qsys = SplitOpGPE1D(
+#     v=initial_trap,
+#     g=g,
+#     dt=1e-3,
+#     **params
+# ).set_wavefunction(init_state)
+# test_init_state = qsys.propagate(0.05)
+#
+# x = qsys.x
+# plt.semilogy(x, np.abs(init_state), label='initial condition')
+# plt.semilogy(x, np.abs(test_init_state), label='propagated init condition')
+#
+# plt.semilogy(x, v(x))
+# plt.xlabel('$x$')
+# plt.ylabel('$v(x)$')
+# plt.legend()
+# plt.show()
 
 ########################################################################################################################
 #
@@ -251,8 +251,6 @@ times = np.linspace(0, T, 500)
 gpe_wavefunctions = [
      gpe_qsys.propagate(t).copy() for t in times
 ]
-
-analyze_propagation(gpe_qsys, gpe_wavefunctions, "GPE evolution")
 
 ########################################################################################################################
 #

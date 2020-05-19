@@ -70,7 +70,7 @@ for omega in [4.,]:
 
     # propagate till time T and for each time step save a probability density
     wavefunctions = [harmonic_osc.propagate(t).copy() for t in np.arange(0, T, harmonic_osc.dt)]
-
+    fig1 = plt.figure(1)
     plt.title(
         "Test 1: Time evolution of harmonic oscillator with $\\omega$ = {:.1f} (a.u.)".format(omega)
     )
@@ -86,12 +86,12 @@ for omega in [4.,]:
     plt.xlabel('coordinate $x$ (a.u.)')
     plt.ylabel('time $t$ (a.u.)')
     plt.colorbar()
-    plt.show()
+
 
     ##################################################################################################
 
     times = harmonic_osc.times
-
+    fig2 = plt.figure(2)
     plt.subplot(131)
     plt.title("Verify the first Ehrenfest theorem")
 
@@ -139,13 +139,12 @@ for omega in [4.,]:
             100. * (1. - h.min() / h.max())
         )
     )
-
     plt.plot(times, h)
     plt.ylabel('energy')
     plt.xlabel('time $t$ (a.u.)')
 
-    plt.show()
 
+    fig3 = plt.figure(3)
     plt.title('time increments $dt$')
     plt.plot(harmonic_osc.time_incremenets)
     plt.ylabel('$dt$')

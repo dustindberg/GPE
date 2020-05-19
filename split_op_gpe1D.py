@@ -1,8 +1,8 @@
 import numpy as np
-from scipy import fftpack  # Tools for fourier transform
+from scipy import fft, ifft  # Tools for fourier transform
 from numpy import linalg  # Linear algebra for dense matrix
 from numba import njit, jit
-from numba.targets.registry import CPUDispatcher
+from numba.core.registry import CPUDispatcher
 from types import FunctionType
 
 
@@ -81,7 +81,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, 
 
         # get momentum density
         density = np.abs(
-            fftpack.fft((-1) ** np.arange(x_grid_dim) * psi, overwrite_x=True)
+            fft.fft((-1) ** np.arange(x_grid_dim) * psi, overwrite_x=True)
         ) ** 2
         density /= density.sum()
 
@@ -99,12 +99,12 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, 
         exp_potential(wavefunction)
 
         # going to the momentum representation
-        wavefunction = fftpack.fft(wavefunction, overwrite_x=True)
+        wavefunction = fft.fft(wavefunction, overwrite_x=True)
 
         wavefunction *= img_exp_k
 
         # going back to the coordinate representation
-        wavefunction = fftpack.ifft(wavefunction, overwrite_x=True)
+        wavefunction = fft.ifft(wavefunction, overwrite_x=True)
 
         exp_potential(wavefunction)
 
@@ -423,14 +423,14 @@ class SplitOpGPE1D(object):
         self.expV(wavefunction, self.t, dt)
 
         # going to the momentum representation
-        wavefunction = fftpack.fft(wavefunction, overwrite_x=True)
+        wavefunction = fft.fft(wavefunction, overwrite_x=True)
 
         # efficiently evaluate
         #   wavefunction *= exp(-1j * dt * k)
         self.expK(wavefunction, self.t, dt)
 
         # going back to the coordinate representation
-        wavefunction = fftpack.ifft(wavefunction, overwrite_x=True)
+        wavefunction = fft.ifft(wavefunction, overwrite_x=True)
 
         # efficiently evaluate
         #   wavefunction *= (-1) ** k * exp(-0.5j * dt * v)
@@ -468,7 +468,7 @@ class SplitOpGPE1D(object):
             # calculate density in the momentum representation
             np.copyto(density, self.wavefunction)
             density *= self.minus
-            density = fftpack.fft(density, overwrite_x=True)
+            density = fft.fft(density, overwrite_x=True)
 
             # get the density in the momentum space
             np.abs(density, out=density)

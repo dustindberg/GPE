@@ -1,0 +1,3 @@
+#!/home/skref/PycharmProjects/GPE/venv/bin/python
+from numba.pycc import main
+main()

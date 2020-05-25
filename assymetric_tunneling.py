@@ -8,8 +8,10 @@ from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D # class for the split o
 g = 2194.449140
 propagation_dt = 1e-4
 
+#What does this correspond to?
 hight_assymetric = 1e2
 
+#What does this correspond to?
 delta = 3.5
 
 @njit
@@ -17,6 +19,7 @@ def v(x, t=0.):
     """
     Potential energy
     """
+    print((x < 0))
     return 0.5 * x ** 2 + x ** 2 * hight_assymetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
 
@@ -46,7 +49,8 @@ def k(p, t=0.):
 
 # save parameters as a separate bundle
 params = dict(
-    x_grid_dim=32 * 1024,
+    x_grid_dim=2 * 1024,
+    #for faster testing, change x_grid_dim to 2*1024, for more accuracy, 32*1024
     x_amplitude=80.,
 
     k=k,

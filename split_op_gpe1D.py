@@ -22,6 +22,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, 
     :param kwargs: ignored
 
     :return: wavefunction
+    for mod: :return: wavefunction, ground state energy
     """
     print("\nStarting imaginary time propagation")
 
@@ -126,6 +127,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, 
     print("\n\nFinal current ground state energy = {:.4e}".format(energy))
 
     return wavefunction
+    #return wavefunction, energy
 
 ########################################################################################################################
 #

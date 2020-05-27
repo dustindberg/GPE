@@ -9,7 +9,7 @@ g = 2194.449140
 propagation_dt = 1e-4
 
 #height of asymmetric barrier
-hight_assymetric = 1e2
+height_asymmetric = 1e2
 
 #This corresponds to sharpness parameter
 delta = 3.5
@@ -19,16 +19,20 @@ def v(x, t=0.):
     """
     Potential energy
     """
-    return 0.5 * x ** 2 + x ** 2 * hight_assymetric * np.exp(-(x / delta) ** 2) * (x < 0)
-
+    #Option 1
+    return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    #Option 2
+    #return 0.5 * x ** 2 + height_asymmetric * np.sin(x)**2 * np.exp(-(x / delta) **2 ) * (x<0)
 
 @njit
 def diff_v(x, t=0.):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
-    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * hight_assymetric * np.exp(-(x / delta) ** 2) * (x < 0)
-
+    #Option 1
+    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    #Option 2
+    #return x + (2*np.sin(x)*np.cos(x) - 2. * x * (1. / delta) ** 2 * np.sin(x) ** 2) * height_asymmetric np.exp(-(x / delta) **2 ) * (x<0)
 
 @njit
 def diff_k(p, t=0.):
@@ -36,6 +40,7 @@ def diff_k(p, t=0.):
     the derivative of the kinetic energy for Ehrenfest theorem evaluation
     """
     return p
+
 
 
 @njit

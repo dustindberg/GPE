@@ -33,6 +33,7 @@ def diff_v(x, t=0.):
     return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 2
     #return x + (2*np.sin(x)*np.cos(x) - 2. * x * (1. / delta) ** 2 * np.sin(x) ** 2) * height_asymmetric np.exp(-(x / delta) **2 ) * (x<0)
+    #run tomorrow
 
 @njit
 def diff_k(p, t=0.):

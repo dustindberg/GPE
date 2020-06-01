@@ -5,17 +5,36 @@ import numpy as np
 from scipy.interpolate import UnivariateSpline
 from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D # class for the split operator propagation
 
+########################################################################################################################
+#
+#Define the parameters for interaction and potential
+#
+########################################################################################################################
+
+#Assign physical values used
+Hbar = 1.054571800e-34
+N = 10e4                                #number of particles
+m = 1.443161930e-25                     #Mass of 87Rb in kg
+Omeg_x = 40 * np.pi                     #Harmonic oscillation in the x-axis in Hz
+Omeg_y = 2000 * np.pi                   #Harmonic oscillation in the y-axis in Hz
+Omeg_z = 2000 * np.pi                   #Harmonic oscillation in the z-axis in Haz
+L_x = np.sqrt(Hbar / (m * Omeg_x))      #Characteristic length in the x-direction in meters
+a_s = 100 * 5.291772109e-11             #scattering length also in meters
+
+
+#Assign a value to the dimensionless interaction
+#g = (2 * N * L_x * m * a_s * np.sqrt(Omeg_y * Omeg_z))/Hbar
 g = 2194.449140
 propagation_dt = 1e-4
 
 #height of asymmetric barrier
-height_asymmetric = 6e2
+height_asymmetric = 140
 
 #This corresponds to sharpness parameter
 delta = 3.5
 
-#Increases the number of peaks for Option 2
-osc = (15)
+#Increases the number of peaks for Option 2 or second peak width for Option 3
+osc = 6
 
 @njit
 def v(x, t=0.):
@@ -25,9 +44,9 @@ def v(x, t=0.):
     #Option 1
     #return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 2
-    #return 0.5 * x ** 2 + height_asymmetric * np.sin(osc * x) ** 2 * np.exp(-(x / delta) ** 2) * (x < 0)
+    return 0.5 * x ** 2 + height_asymmetric * np.sin(osc * x) ** 2 * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 3
-    return 0.5* x ** 2 + height_asymmetric * x ** 2 * np.exp(-(x / delta) ** 2) * (x < 0) + 0.5 * height_asymmetric * x ** 2 * np.exp(-(x / osc) ** 2) * (x < 0)
+    #return 0.5* x ** 2 + height_asymmetric * x ** 2 * np.exp(-(x / delta) ** 2) * (x < 0) + 0.05 * height_asymmetric * x ** 2 * np.exp(-((x / osc) + 1) ** 2) * (x < 0)
 
 @njit
 def diff_v(x, t=0.):
@@ -37,10 +56,16 @@ def diff_v(x, t=0.):
     #Option 1
     #return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 2
-    #return x + (2 * osc * np.sin(osc * x) * np.cos(osc * x) - 2. * x * (1. / delta) ** 2 * np.sin(osc * x) ** 2) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    return x + (2 * osc * np.sin(osc * x) * np.cos(osc * x) - 2. * x * (1. / delta) ** 2 * np.sin(osc * x) ** 2) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 3
-    return x + (x - x ** 3 * (1./delta) ** 2) * 2. * height_asymmetric * np.exp(-(x / delta) ** 2) + (x - x ** 3 * (1./osc) ** 2) * height_asymmetric * np.exp(-(x / osc) ** 2) * (x < 0)
+    #return x + ((x - x ** 3 * (1. / delta) ** 2) * 2 * height_asymmetric * np.exp(-(x / delta) ** 2)) + ((x - (x/osc + 1) * x **2 * (1. / osc)) * 0.1 * height_asymmetric * np.exp(-((x / osc) + 1) ** 2))
 
+@njit
+def v_units(v):
+    """"
+    The potential energy with corrected units
+    """
+    return (v * Hbar ** 2) / (L_x ** 2 * m)
 
 @njit
 def diff_k(p, t=0.):
@@ -405,7 +430,7 @@ plt.show()
 
 plt.title('Potential')
 x = gpe_qsys.x
-plt.plot(x, v(x))
+plt.plot(x, v_units(v(x)))
 plt.xlabel('$x / 2.4\mu m$ ')
-plt.ylabel('$v(x)$')
+plt.ylabel('$V(x) Joules$')
 plt.show()

@@ -13,15 +13,18 @@ from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D # class for the split o
 ########################################################################################################################
 
 #Assign physical values used
-N = 10e4                                #number of particles
-m = 1.443161930e-25                     #Mass of 87Rb in kg
-Omeg_x = 20 * 2 * np.pi                 #Harmonic oscillation in the x-axis in Hz
-Omeg_y = 1000 * 2 * np.pi               #Harmonic oscillation in the y-axis in Hz
-Omeg_z = 1000 * 2 * np.pi               #Harmonic oscillation in the z-axis in Hz
-L_x = np.sqrt(hbar / (m * Omeg_x))      #Characteristic length in the x-direction in meters
-L_y = np.sqrt(hbar / (m * Omeg_y))
-L_z = np.sqrt(hbar / (m * Omeg_z))
-a_s = 100 * 5.291772109e-11             #scattering length also in meters
+N = 1e5                                                 #number of particles
+m = 1.443161930e-25                                     #Mass of 87Rb in kg
+Omeg_x = 20 * 2 * np.pi                                 #Harmonic oscillation in the x-axis in Hz
+Omeg_y = 1000 * 2 * np.pi                               #Harmonic oscillation in the y-axis in Hz
+Omeg_z = 1000 * 2 * np.pi                               #Harmonic oscillation in the z-axis in Hz
+L_x = np.sqrt(hbar / (m * Omeg_x))                      #Characteristic length in the x-direction in meters
+L_y = np.sqrt(hbar / (m * Omeg_y))                      #Characteristic length in the y-direction in meters
+L_z = np.sqrt(hbar / (m * Omeg_z))                      #Characteristic length in the z-direction in meters
+a_s = 100 * 5.291772109e-11                             #scattering length also in meters
+Energy_con  = (hbar ** 2) / (L_x ** 2 * m)              #Converts unit-less energy terms to joules
+mKelvin_con = Energy_con * (1e3 / Boltzmann)            #converts Joules energy terms to milliKelvin
+SpecVol_con = (L_x * L_y * L_z)/N                       #converts unit-less spacial terms into specific volume: m^3 per particle
 
 
 #Assign a value to the dimensionless interaction
@@ -127,7 +130,7 @@ def initial_trap(x, t=0):
     return 12.5 * (x + 20.) ** 2
 
 
-init_state = imag_time_gpe1D(
+init_state, mu = imag_time_gpe1D(
     #for mod: init_state, mu = imag_time_gpe1D( add to all states and flipped
     v=initial_trap,
     g=g,
@@ -136,7 +139,7 @@ init_state = imag_time_gpe1D(
     **params
 )
 
-init_state = imag_time_gpe1D(
+init_state, mu = imag_time_gpe1D(
     wavefunction=init_state,
     g=g,
     v=initial_trap,
@@ -147,7 +150,9 @@ init_state = imag_time_gpe1D(
 
 flipped_initial_trap = njit(lambda x, t: initial_trap(-x, t))
 
-flipped_init_state = imag_time_gpe1D(
+#can take a separate mu for flipped
+
+flipped_init_state, mu = imag_time_gpe1D(
     v=flipped_initial_trap,
     g=g,
     dt=1e-3,
@@ -155,7 +160,7 @@ flipped_init_state = imag_time_gpe1D(
     **params
 )
 
-flipped_init_state = imag_time_gpe1D(
+flipped_init_state, mu = imag_time_gpe1D(
     wavefunction=flipped_init_state,
     g=g,
     v=flipped_initial_trap,
@@ -398,8 +403,8 @@ analyze_propagation(
 ########################################################################################################################
 
 dx = gpe_qsys.dx
-x_cut = int(0.6 * gpe_qsys.wavefunction.size)               #Ask for clarification on the cuts
-x_cut_flipped = int(0.4 * gpe_qsys.wavefunction.size)       #Ask for clarification on the cuts
+x_cut = int(0.6 * gpe_qsys.wavefunction.size)               #These are cuts such that we observe the behavior about the initial location of the wave
+x_cut_flipped = int(0.4 * gpe_qsys.wavefunction.size)
 
 plt.subplot(121)
 plt.plot(
@@ -446,7 +451,7 @@ def v_mKelvin(v):
     """"
     The potential energy with corrected units milliKelvin
     """
-    return (1e3 * v * hbar ** 2) / (L_x ** 2 * m * Boltzmann)
+    return v * mKelvin_con
 
 plt.title('Potential')
 x = gpe_qsys.x
@@ -461,18 +466,38 @@ plt.show()
 #
 ########################################################################################################################
 
-#plt.title('Thomas Fermi approximation test 1')
-#plt.plot(g_constant(p), g_compare(k), label = "Test")
-#plt.plot(g_constant(p), g_constant(p), label = "Constant for comparison")
-#plt.xlabel("Interaction Parameter (a.u.)")
-#plt.ylabel("Interaction Parameter - Kinetic Energy (a.u.)")
-#plt.show()
 
-#plt.title('Thomas Fermi approximation test 2')
-#plt.plot (v,v-k, label = "Test")
-#plt.plot (v,v, label = "Constant for comparison")
-#plt.xlabel("Potential Energy (a.u.)")
-#plt.ylabel("Potential - Kinetic Energy (a.u.)")
-#plt.show()
+@njit
+def tf_test(mu, v, g):
+    """"
+    Right side of the equation for Thomas-Fermi approximation test
+    """
+    y = (mu - v) / g
+    return y * (y > 0)
+
+plt.plot()
+tf_test(mu, initial_trap(x), g)
+
+#g_units = g * Energy_con * SpecVol_con / (2*np.pi)
+
+plt.title('Thomas-Fermi Approximation Test')
+plt.subplot(123)
+plt.plot(
+    x,
+    np.abs(init_state) ** 2, axis=1),
+    label='GPE'
+)
+
+plt.plot(
+tf_test(mu, flipped_init_state, g)
+    x,
+    np.abs(flipped_init_state) ** 2, axis=1),
+    label='Flipped GPE'
+)
+plt.legend()
+plt.xlabel("Chemical Potential")
+plt.ylabel("Wave function squared")
+
+plt.show()
 
 

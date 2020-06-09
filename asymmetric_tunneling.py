@@ -15,9 +15,9 @@ from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D # class for the split o
 #Assign physical values used
 N = 1e5                                                 #number of particles
 m = 1.443161930e-25                                     #Mass of 87Rb in kg
-Omeg_x = 20 * 2 * np.pi                                 #Harmonic oscillation in the x-axis in Hz
-Omeg_y = 1000 * 2 * np.pi                               #Harmonic oscillation in the y-axis in Hz
-Omeg_z = 1000 * 2 * np.pi                               #Harmonic oscillation in the z-axis in Hz
+Omeg_x = 50 * 2 * np.pi                                 #Harmonic oscillation in the x-axis in Hz
+Omeg_y = 500 * 2 * np.pi                               #Harmonic oscillation in the y-axis in Hz
+Omeg_z = 500 * 2 * np.pi                               #Harmonic oscillation in the z-axis in Hz
 L_x = np.sqrt(hbar / (m * Omeg_x))                      #Characteristic length in the x-direction in meters
 L_y = np.sqrt(hbar / (m * Omeg_y))                      #Characteristic length in the y-direction in meters
 L_z = np.sqrt(hbar / (m * Omeg_z))                      #Characteristic length in the z-direction in meters
@@ -25,7 +25,6 @@ a_s = 100 * 5.291772109e-11                             #scattering length also 
 Energy_con  = (hbar ** 2) / (L_x ** 2 * m)              #Converts unit-less energy terms to joules
 mKelvin_con = Energy_con * (1e3 / Boltzmann)            #converts Joules energy terms to milliKelvin
 SpecVol_con = (L_x * L_y * L_z)/N                       #converts unit-less spacial terms into specific volume: m^3 per particle
-
 
 #Assign a value to the dimensionless interaction
 #g = (2 * N * L_x * m * a_s * np.sqrt(Omeg_y * Omeg_z))/hbar
@@ -99,7 +98,7 @@ def k(p, t=0.):
 
 # save parameters as a separate bundle
 params = dict(
-    x_grid_dim=8 * 1024,
+    x_grid_dim=16 * 1024,
     #for faster testing, change x_grid_dim to 2*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy. 8 should be used for bulk testing of code with needed accuracy
     x_amplitude=80.,
 
@@ -127,15 +126,25 @@ def initial_trap(x, t=0):
     :return:
     """
     # omega = 2 * Pi * 100Hz
+    #Convert to new Omega (leave offset of 20)
     return 12.5 * (x + 20.) ** 2
 
-
+#Increase first step, and then tighten with intermediate step
 init_state, mu = imag_time_gpe1D(
     #for mod: init_state, mu = imag_time_gpe1D( add to all states and flipped
     v=initial_trap,
     g=g,
     dt=1e-3,
     epsilon=1e-8,
+    **params
+)
+
+init_state, mu = imag_time_gpe1D(
+    #for mod: init_state, mu = imag_time_gpe1D( add to all states and flipped
+    v=initial_trap,
+    g=g,
+    dt=1e-4,
+    epsilon=1e-9,
     **params
 )
 
@@ -150,9 +159,8 @@ init_state, mu = imag_time_gpe1D(
 
 flipped_initial_trap = njit(lambda x, t: initial_trap(-x, t))
 
-#can take a separate mu for flipped
 
-flipped_init_state, mu = imag_time_gpe1D(
+flipped_init_state, mu_flip = imag_time_gpe1D(
     v=flipped_initial_trap,
     g=g,
     dt=1e-3,
@@ -160,7 +168,7 @@ flipped_init_state, mu = imag_time_gpe1D(
     **params
 )
 
-flipped_init_state, mu = imag_time_gpe1D(
+flipped_init_state, mu_flip = imag_time_gpe1D(
     wavefunction=flipped_init_state,
     g=g,
     v=flipped_initial_trap,
@@ -186,6 +194,70 @@ flipped_init_state, mu = imag_time_gpe1D(
 # plt.ylabel('$v(x)$')
 # plt.legend()
 # plt.show()
+
+########################################################################################################################
+#
+#Adding tests for the Thomas Fermi approximation
+#
+########################################################################################################################
+
+@njit
+def tf_test(mu, v, g):
+    """"
+    Right side of the equation for Thomas-Fermi approximation test
+    """
+    y = (mu - v) / g
+    return y * (y > 0)
+
+#plt.plot()
+#tf_test(mu, initial_trap(x), g)
+
+#g_units = g * Energy_con * SpecVol_con / (2*np.pi)
+dx = 2. * params['x_amplitude'] / params['x_grid_dim']
+x = (np.arange(params['x_grid_dim']) - params['x_grid_dim'] / 2) * dx
+rhs = tf_test(mu, initial_trap(x), g)
+lhs = np.abs(init_state) ** 2
+plt.title('Thomas-Fermi Approximation Test')
+plt.plot(
+    rhs, lhs,
+    label='GPE'
+)
+plt.plot(rhs, rhs+0.06,label='Slope')
+plt.legend(numpoints=1)
+plt.xlabel('$\mu - V(x) / g$')
+plt.ylabel('$|\Psi_0|^2$')
+plt.show()
+
+#TF Approx plot
+plt.plot(x, rhs/rhs.max(), label='Thomas Fermi')
+plt.plot(x, lhs/lhs.max(), label='GPE')
+plt.legend(numpoints=1)
+plt.xlabel('$x$')
+plt.ylabel('Density')
+plt.show()
+
+rhs = tf_test(mu_flip, flipped_initial_trap(x, 0), g)
+lhs = np.abs(flipped_init_state) ** 2
+plt.title('Thomas-Fermi Approximation Test')
+plt.plot(
+    rhs, lhs,
+    label='Flipped GPE'
+)
+plt.plot(rhs, rhs+0.06,label='Slope')
+plt.legend(numpoints=1)
+plt.xlabel('$\mu - V_0(x) / g$')
+plt.ylabel('$|\Psi|^2$')
+
+plt.show()
+
+#TF Approx plot
+plt.plot(x, rhs/rhs.max(), label='Thomas Fermi')
+plt.plot(x, lhs/lhs.max(), label='Flipped GPE')
+plt.legend(numpoints=1)
+plt.xlabel('$x$')
+plt.ylabel('Density')
+plt.show()
+
 
 ########################################################################################################################
 #
@@ -460,44 +532,5 @@ plt.xlabel('$x / 2.4\mu m$ ')
 plt.ylabel('$V(x) Joules$')
 plt.show()
 
-########################################################################################################################
-#
-#Adding tests for the Thomas Fermi approximation
-#
-########################################################################################################################
-
-
-@njit
-def tf_test(mu, v, g):
-    """"
-    Right side of the equation for Thomas-Fermi approximation test
-    """
-    y = (mu - v) / g
-    return y * (y > 0)
-
-plt.plot()
-tf_test(mu, initial_trap(x), g)
-
-#g_units = g * Energy_con * SpecVol_con / (2*np.pi)
-
-plt.title('Thomas-Fermi Approximation Test')
-plt.subplot(123)
-plt.plot(
-    x,
-    np.abs(init_state) ** 2, axis=1),
-    label='GPE'
-)
-
-plt.plot(
-tf_test(mu, flipped_init_state, g)
-    x,
-    np.abs(flipped_init_state) ** 2, axis=1),
-    label='Flipped GPE'
-)
-plt.legend()
-plt.xlabel("Chemical Potential")
-plt.ylabel("Wave function squared")
-
-plt.show()
 
 

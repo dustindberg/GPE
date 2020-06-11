@@ -12,23 +12,29 @@ from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D # class for the split o
 #
 ########################################################################################################################
 
-#Assign physical values used
-N = 1e5                                                 #number of particles
+#Physical Values
+N = 1e4                                                 #number of particles
 m = 1.443161930e-25                                     #Mass of 87Rb in kg
 Omeg_x = 50 * 2 * np.pi                                 #Harmonic oscillation in the x-axis in Hz
-Omeg_y = 500 * 2 * np.pi                               #Harmonic oscillation in the y-axis in Hz
-Omeg_z = 500 * 2 * np.pi                               #Harmonic oscillation in the z-axis in Hz
+Omeg_y = 500 * 2 * np.pi                                #Harmonic oscillation in the y-axis in Hz
+Omeg_z = 500 * 2 * np.pi                                #Harmonic oscillation in the z-axis in Hz
 L_x = np.sqrt(hbar / (m * Omeg_x))                      #Characteristic length in the x-direction in meters
 L_y = np.sqrt(hbar / (m * Omeg_y))                      #Characteristic length in the y-direction in meters
 L_z = np.sqrt(hbar / (m * Omeg_z))                      #Characteristic length in the z-direction in meters
 a_s = 100 * 5.291772109e-11                             #scattering length also in meters
-Energy_con  = (hbar ** 2) / (L_x ** 2 * m)              #Converts unit-less energy terms to joules
-mKelvin_con = Energy_con * (1e3 / Boltzmann)            #converts Joules energy terms to milliKelvin
-SpecVol_con = (L_x * L_y * L_z)/N                       #converts unit-less spacial terms into specific volume: m^3 per particle
 
-#Assign a value to the dimensionless interaction
-#g = (2 * N * L_x * m * a_s * np.sqrt(Omeg_y * Omeg_z))/hbar
-g = 2194.449140
+#Converstion Factors
+energy_conv  = (hbar ** 2) / (L_x ** 2 * m)             #Converts unit-less energy terms to joules
+mKelvin_conv = energy_conv * (1e3 / Boltzmann)          #Converts Joules energy terms to milliKelvin
+specvol_conv = (L_x * L_y * L_z) / N                    #Converts unit-less spacial terms into specific volume: m^3 per particle
+time_conv = m * L_x ** 2 * (1. / hbar)                  #Converts characteristic time into seconds
+
+
+#In program calculation of the dimensionless interaction parameter
+g = 2 * N * L_x * m * a_s * np.sqrt(Omeg_y * Omeg_z) * (1. / hbar)
+#Hand Calculated dimensionless interaction parameter
+#g = 2194.449140
+
 propagation_dt = 1e-4
 
 #height of asymmetric barrier
@@ -98,7 +104,7 @@ def k(p, t=0.):
 
 # save parameters as a separate bundle
 params = dict(
-    x_grid_dim=16 * 1024,
+    x_grid_dim=8 * 1024,
     #for faster testing, change x_grid_dim to 2*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy. 8 should be used for bulk testing of code with needed accuracy
     x_amplitude=80.,
 
@@ -126,16 +132,18 @@ def initial_trap(x, t=0):
     :return:
     """
     # omega = 2 * Pi * 100Hz
+    #omega should be 2 * Pi * 50Hz
     #Convert to new Omega (leave offset of 20)
-    return 12.5 * (x + 20.) ** 2
+    v_0 = 0.5 * m ** 2 * Omeg_x ** 2 * L_x ** 4 * (1. / hbar ** 2)
+    return v_0 * (x + 20.) ** 2
 
 #Increase first step, and then tighten with intermediate step
 init_state, mu = imag_time_gpe1D(
     #for mod: init_state, mu = imag_time_gpe1D( add to all states and flipped
     v=initial_trap,
     g=g,
-    dt=1e-3,
-    epsilon=1e-8,
+    dt=1e-2,
+    epsilon=5e-7,
     **params
 )
 
@@ -143,8 +151,8 @@ init_state, mu = imag_time_gpe1D(
     #for mod: init_state, mu = imag_time_gpe1D( add to all states and flipped
     v=initial_trap,
     g=g,
-    dt=1e-4,
-    epsilon=1e-9,
+    dt=5e-3,
+    epsilon=7e-8,
     **params
 )
 
@@ -201,6 +209,7 @@ flipped_init_state, mu_flip = imag_time_gpe1D(
 #
 ########################################################################################################################
 
+#Define Parameters for graphing
 @njit
 def tf_test(mu, v, g):
     """"
@@ -209,14 +218,16 @@ def tf_test(mu, v, g):
     y = (mu - v) / g
     return y * (y > 0)
 
-#plt.plot()
-#tf_test(mu, initial_trap(x), g)
-
-#g_units = g * Energy_con * SpecVol_con / (2*np.pi)
 dx = 2. * params['x_amplitude'] / params['x_grid_dim']
 x = (np.arange(params['x_grid_dim']) - params['x_grid_dim'] / 2) * dx
 rhs = tf_test(mu, initial_trap(x), g)
 lhs = np.abs(init_state) ** 2
+
+#convert parameters to physical units :')
+x_mum = x * 1e6 * (1. / L_x)
+g_mum =
+
+#Plot the Thomas-Fermi approximation
 plt.title('Thomas-Fermi Approximation Test')
 plt.plot(
     rhs, lhs,
@@ -523,7 +534,7 @@ def v_mKelvin(v):
     """"
     The potential energy with corrected units milliKelvin
     """
-    return v * mKelvin_con
+    return v * mKelvin_conv
 
 plt.title('Potential')
 x = gpe_qsys.x

@@ -25,8 +25,9 @@ a_s = 100 * 5.291772109e-11                             #scattering length also 
 
 #Converstion Factors
 energy_conv  = (hbar ** 2) / (L_x ** 2 * m)             #Converts unit-less energy terms to joules
-mKelvin_conv = energy_conv * (1e3 / Boltzmann)          #Converts Joules energy terms to milliKelvin
+nKelvin_conv = energy_conv * (1e9 / Boltzmann)          #Converts Joules energy terms to milliKelvin
 specvol_conv = (L_x * L_y * L_z) / N                    #Converts unit-less spacial terms into specific volume: m^3 per particle
+specvol_nm = specvol_conv * 1e27                        #Converts m^3 per particle spacial terms into nanometers^3 per particle
 time_conv = m * L_x ** 2 * (1. / hbar)                  #Converts characteristic time into seconds
 
 
@@ -220,46 +221,36 @@ def tf_test(mu, v, g):
 
 dx = 2. * params['x_amplitude'] / params['x_grid_dim']
 x = (np.arange(params['x_grid_dim']) - params['x_grid_dim'] / 2) * dx
+x_nm = x * 1e9 * (1. / L_x)
+mu_nKelvin = mu * nKelvin_conv                                              #Converts chemical potential to units of nanoKelvin
+g_units = g * nKelvin_conv * specvol_nm * 2 * np.pi
+
 rhs = tf_test(mu, initial_trap(x), g)
 lhs = np.abs(init_state) ** 2
 
-#convert parameters to physical units :')
-x_mum = x * 1e6 * (1. / L_x)
-g_mum =
-
-#Plot the Thomas-Fermi approximation
-plt.title('Thomas-Fermi Approximation Test')
-plt.plot(
-    rhs, lhs,
-    label='GPE'
-)
-plt.plot(rhs, rhs+0.06,label='Slope')
-plt.legend(numpoints=1)
-plt.xlabel('$\mu - V(x) / g$')
-plt.ylabel('$|\Psi_0|^2$')
-plt.show()
 
 #TF Approx plot
 plt.plot(x, rhs/rhs.max(), label='Thomas Fermi')
 plt.plot(x, lhs/lhs.max(), label='GPE')
+plt.xlim([-40, 0])
 plt.legend(numpoints=1)
 plt.xlabel('$x$')
 plt.ylabel('Density')
 plt.show()
 
+#plot with physical units
+#rhs = tf_test(mu_nKelvin, initial_trap(x), g_units)
+#lhs = (L_x * L_y * L_z) * 1e27 * np.abs(init_state) ** 2
+plt.plot(x_nm, rhs, label='Thomas Fermi')
+plt.plot(x_nm, lhs, label='GPE')
+plt.xlim([-2.5e16, 0])
+plt.legend(numpoints=1)
+plt.xlabel('$x (nm)$')
+plt.ylabel('Density')
+plt.show()
+
 rhs = tf_test(mu_flip, flipped_initial_trap(x, 0), g)
 lhs = np.abs(flipped_init_state) ** 2
-plt.title('Thomas-Fermi Approximation Test')
-plt.plot(
-    rhs, lhs,
-    label='Flipped GPE'
-)
-plt.plot(rhs, rhs+0.06,label='Slope')
-plt.legend(numpoints=1)
-plt.xlabel('$\mu - V_0(x) / g$')
-plt.ylabel('$|\Psi|^2$')
-
-plt.show()
 
 #TF Approx plot
 plt.plot(x, rhs/rhs.max(), label='Thomas Fermi')
@@ -269,6 +260,28 @@ plt.xlabel('$x$')
 plt.ylabel('Density')
 plt.show()
 
+#Plot the Thomas-Fermi approximation
+#plt.title('Thomas-Fermi Approximation Test')
+#plt.plot(
+#    rhs, lhs,
+#    label='GPE'
+#)
+#plt.plot(rhs, rhs+0.06,label='Slope')
+#plt.legend(numpoints=1)
+#plt.xlabel('$\mu - V(x) / g$')
+#plt.ylabel('$|\Psi_0|^2$')
+#plt.show()
+
+#plt.title('Thomas-Fermi Approximation Test')
+#plt.plot(
+#    rhs, lhs,
+#    label='Flipped GPE'
+#)
+#plt.plot(rhs, rhs+0.06,label='Slope')
+#plt.legend(numpoints=1)
+#plt.xlabel('$\mu - V_0(x) / g$')
+#plt.ylabel('$|\Psi|^2$')
+#plt.show()
 
 ########################################################################################################################
 #
@@ -534,7 +547,7 @@ def v_mKelvin(v):
     """"
     The potential energy with corrected units milliKelvin
     """
-    return v * mKelvin_conv
+    return v * nKelvin_conv
 
 plt.title('Potential')
 x = gpe_qsys.x

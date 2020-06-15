@@ -25,10 +25,11 @@ a_s = 100 * 5.291772109e-11                             #scattering length also 
 
 #Converstion Factors
 energy_conv  = (hbar ** 2) / (L_x ** 2 * m)             #Converts unit-less energy terms to joules
-nKelvin_conv = energy_conv * (1e9 / Boltzmann)          #Converts Joules energy terms to milliKelvin
+nKelvin_conv = energy_conv * (1e9 / Boltzmann)          #Converts Joules energy terms to nanoKelvin
+muKelvin_conv = energy_conv * (1e3 / Boltzmann)         #Converts Joules energy terms to microKelvin
 specvol_conv = (L_x * L_y * L_z) / N                    #Converts unit-less spacial terms into specific volume: m^3 per particle
 specvol_nm = specvol_conv * 1e27                        #Converts m^3 per particle spacial terms into nanometers^3 per particle
-time_conv = m * L_x ** 2 * (1. / hbar)                  #Converts characteristic time into seconds
+time_conv = m * L_x ** 2 * (1. / hbar) * 1e3            #Converts characteristic time into milliseconds
 
 
 #In program calculation of the dimensionless interaction parameter
@@ -39,7 +40,7 @@ g = 2 * N * L_x * m * a_s * np.sqrt(Omeg_y * Omeg_z) * (1. / hbar)
 propagation_dt = 1e-4
 
 #height of asymmetric barrier
-height_asymmetric = 190
+height_asymmetric = 120
 
 #This corresponds to sharpness parameter
 delta = 3.5
@@ -105,8 +106,8 @@ def k(p, t=0.):
 
 # save parameters as a separate bundle
 params = dict(
-    x_grid_dim=8 * 1024,
-    #for faster testing, change x_grid_dim to 2*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy. 8 should be used for bulk testing of code with needed accuracy
+    x_grid_dim=16 * 1024,
+    #for faster testing, change x_grid_dim to 8*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy. 8 should be used for bulk testing of code with needed accuracy
     x_amplitude=80.,
 
     k=k,
@@ -140,22 +141,20 @@ def initial_trap(x, t=0):
 
 #Increase first step, and then tighten with intermediate step
 init_state, mu = imag_time_gpe1D(
-    #for mod: init_state, mu = imag_time_gpe1D( add to all states and flipped
     v=initial_trap,
     g=g,
-    dt=1e-2,
-    epsilon=5e-7,
+    dt=1e-3,
+    epsilon=1e-8,
     **params
 )
 
-init_state, mu = imag_time_gpe1D(
-    #for mod: init_state, mu = imag_time_gpe1D( add to all states and flipped
-    v=initial_trap,
-    g=g,
-    dt=5e-3,
-    epsilon=7e-8,
-    **params
-)
+#init_state, mu = imag_time_gpe1D(
+#    v=initial_trap,
+#    g=g,
+#    dt=5e-4,
+#    epsilon=5e-9,
+#    **params
+#)
 
 init_state, mu = imag_time_gpe1D(
     wavefunction=init_state,
@@ -172,10 +171,18 @@ flipped_initial_trap = njit(lambda x, t: initial_trap(-x, t))
 flipped_init_state, mu_flip = imag_time_gpe1D(
     v=flipped_initial_trap,
     g=g,
-    dt=1e-3,
-    epsilon=1e-8,
+    dt=5e-2,
+    epsilon=5e-7,
     **params
 )
+
+#flipped_init_state, mu_flip = imag_time_gpe1D(
+#    v=flipped_initial_trap,
+#    g=g,
+#    dt=1e-4,
+#    epsilon=1e-9,
+#    **params
+#)
 
 flipped_init_state, mu_flip = imag_time_gpe1D(
     wavefunction=flipped_init_state,
@@ -221,67 +228,53 @@ def tf_test(mu, v, g):
 
 dx = 2. * params['x_amplitude'] / params['x_grid_dim']
 x = (np.arange(params['x_grid_dim']) - params['x_grid_dim'] / 2) * dx
-x_nm = x * 1e9 * (1. / L_x)
+x_mum = x * 1e6 * (1. / L_x)
 mu_nKelvin = mu * nKelvin_conv                                              #Converts chemical potential to units of nanoKelvin
 g_units = g * nKelvin_conv * specvol_nm * 2 * np.pi
 
 rhs = tf_test(mu, initial_trap(x), g)
 lhs = np.abs(init_state) ** 2
 
-
 #TF Approx plot
-plt.plot(x, rhs/rhs.max(), label='Thomas Fermi')
-plt.plot(x, lhs/lhs.max(), label='GPE')
+plt.plot(x, rhs, label='Thomas Fermi')
+plt.plot(x, lhs, label='GPE')
 plt.xlim([-40, 0])
 plt.legend(numpoints=1)
-plt.xlabel('$x$')
-plt.ylabel('Density')
+plt.xlabel('$x * 6.5568e5 m$')
+plt.ylabel('Density * 2.8189e18 m^-3')
 plt.show()
 
-#plot with physical units
-#rhs = tf_test(mu_nKelvin, initial_trap(x), g_units)
-#lhs = (L_x * L_y * L_z) * 1e27 * np.abs(init_state) ** 2
-plt.plot(x_nm, rhs, label='Thomas Fermi')
-plt.plot(x_nm, lhs, label='GPE')
-plt.xlim([-2.5e16, 0])
+#TF Approx plot normalized to 1
+plt.plot(x, rhs/rhs.max(), label='Thomas Fermi normalized to 1')
+plt.plot(x, lhs/lhs.max(), label='GPE normalized to 1')
+plt.xlim([-40, 0])
 plt.legend(numpoints=1)
-plt.xlabel('$x (nm)$')
-plt.ylabel('Density')
+plt.xlabel('$x * 6.5568e5 m$')
+plt.ylabel('Density * 2.8189e18 m^-3')
 plt.show()
 
+#Flip the initial conditions
 rhs = tf_test(mu_flip, flipped_initial_trap(x, 0), g)
 lhs = np.abs(flipped_init_state) ** 2
 
-#TF Approx plot
-plt.plot(x, rhs/rhs.max(), label='Thomas Fermi')
-plt.plot(x, lhs/lhs.max(), label='Flipped GPE')
+#TF Approx plot flipped
+plt.plot(x, rhs, label='Thomas Fermi')
+plt.plot(x, lhs, label='Flipped GPE')
+plt.xlim([0, 40])
 plt.legend(numpoints=1)
-plt.xlabel('$x$')
-plt.ylabel('Density')
+plt.xlabel('$x * 6.5568e5 m$')
+plt.ylabel('Density * 2.8189e18 m^-3')
 plt.show()
 
-#Plot the Thomas-Fermi approximation
-#plt.title('Thomas-Fermi Approximation Test')
-#plt.plot(
-#    rhs, lhs,
-#    label='GPE'
-#)
-#plt.plot(rhs, rhs+0.06,label='Slope')
-#plt.legend(numpoints=1)
-#plt.xlabel('$\mu - V(x) / g$')
-#plt.ylabel('$|\Psi_0|^2$')
-#plt.show()
+#TF Approx plot flipped and normalized to 1
+plt.plot(x, rhs/rhs.max(), label='Thomas Fermi normalized to 1')
+plt.plot(x, lhs/lhs.max(), label='Flipped GPE normalized to 1')
+plt.xlim([0, 40])
+plt.legend(numpoints=1)
+plt.xlabel('$x * 6.5568e5 m$')
+plt.ylabel('Density * 2.8189e18 m^-3')
+plt.show()
 
-#plt.title('Thomas-Fermi Approximation Test')
-#plt.plot(
-#    rhs, lhs,
-#    label='Flipped GPE'
-#)
-#plt.plot(rhs, rhs+0.06,label='Slope')
-#plt.legend(numpoints=1)
-#plt.xlabel('$\mu - V_0(x) / g$')
-#plt.ylabel('$|\Psi|^2$')
-#plt.show()
 
 ########################################################################################################################
 #
@@ -311,8 +304,8 @@ def analyze_propagation(qsys, wavefunctions, title):
         aspect=(extent[1] - extent[0]) / (extent[-1] - extent[-2]),
         norm=SymLogNorm(vmin=1e-13, vmax=1., linthresh=1e-15)
     )
-    plt.xlabel('coordinate $x$ (a.u.)')
-    plt.ylabel('time $t$ (a.u.)')
+    plt.xlabel('coordinate $x * 6.5568e5 m$')
+    plt.ylabel('time $t$ * 3.1831 ms')
     plt.colorbar()
     plt.savefig(title + '.pdf')
 
@@ -339,7 +332,7 @@ def analyze_propagation(qsys, wavefunctions, title):
     )
     plt.legend()
     plt.ylabel('momentum')
-    plt.xlabel('time $t$ (a.u.)')
+    plt.xlabel('time $t$ * 3.1831e-3 s')
 
     plt.subplot(132)
     plt.title("Verify the second Ehrenfest theorem")
@@ -355,7 +348,7 @@ def analyze_propagation(qsys, wavefunctions, title):
     plt.plot(qsys.times, qsys.p_average_rhs, '--b', label='$\\langle -U\'(\\hat{x})\\rangle$')
     plt.legend()
     plt.ylabel('force')
-    plt.xlabel('time $t$ (a.u.)')
+    plt.xlabel('time $t$ * 3.1831e-3 s')
 
     plt.subplot(133)
     plt.title("The expectation value of the hamiltonian")
@@ -370,8 +363,8 @@ def analyze_propagation(qsys, wavefunctions, title):
     print("Initial energy {:.4e}".format(h[0]))
 
     plt.plot(times, h)
-    plt.ylabel('energy')
-    plt.xlabel('time $t$ (a.u.)')
+    plt.ylabel('energy * 2.3996 nK')
+    plt.xlabel('time $t$ * 3.1831e-3 s')
 
     plt.show()
 
@@ -514,7 +507,7 @@ plt.plot(
     label='Flipped Schrodinger'
 )
 plt.legend()
-plt.xlabel("time")
+plt.xlabel('time $t$ * 3.1831 ms')
 plt.ylabel("transmission probability")
 
 plt.subplot(122)
@@ -529,7 +522,7 @@ plt.plot(
     label='Flipped GPE'
 )
 plt.legend()
-plt.xlabel("time")
+plt.xlabel('time $t$ * 3.1831e ms')
 plt.ylabel("transmission probability")
 
 plt.show()
@@ -543,17 +536,17 @@ plt.show()
 #Change units to miliKelvin, move def function here
 
 @njit
-def v_mKelvin(v):
+def v_muKelvin(v):
     """"
     The potential energy with corrected units milliKelvin
     """
-    return v * nKelvin_conv
+    return v * muKelvin_conv
 
 plt.title('Potential')
 x = gpe_qsys.x
-plt.plot(x, v_mKelvin(v(x)))
-plt.xlabel('$x / 2.4\mu m$ ')
-plt.ylabel('$V(x) Joules$')
+plt.plot(x, v_muKelvin(v(x)))
+plt.xlabel('$x * 1.525\mu m$ ')
+plt.ylabel('$V(x)$ \mu K')
 plt.show()
 
 

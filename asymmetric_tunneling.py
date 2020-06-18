@@ -19,7 +19,7 @@ Start_time = datetime.datetime.now(pytz.timezone('US/Central'))
 
 #Physical Values
 N = 1e4                                                 #number of particles
-m = 1.443161930e-25                                     #Mass of 87Rb in kg
+m = 1.4431609e-25                                       #Calculated mass of 87Rb in kg
 Omeg_x = 50 * 2 * np.pi                                 #Harmonic oscillation in the x-axis in Hz
 Omeg_y = 500 * 2 * np.pi                                #Harmonic oscillation in the y-axis in Hz
 Omeg_z = 500 * 2 * np.pi                                #Harmonic oscillation in the z-axis in Hz
@@ -29,11 +29,12 @@ L_z = np.sqrt(hbar / (m * Omeg_z))                      #Characteristic length i
 a_s = 100 * 5.291772109e-11                             #scattering length also in meters
 
 #Converstion Factors
-energy_conv  = ((hbar) / (L_x * np.sqrt(m))) **2        #Converts unit-less energy terms to joules
+energy_conv  = hbar ** 2 / (m * L_x ** 2)                #Converts unit-less energy terms to joules
 nKelvin_conv = energy_conv * (1e9 / Boltzmann)          #Converts Joules energy terms to nanoKelvin
-alt_nKevlin_conv = hbar * 1e9 / (Omeg_x * Boltzmann)    #An alternate conversion from dimensionless energy terms to nanoKelvin
+alt_nKevlin_conv = hbar * Omeg_x * 1e9 / Boltzmann      #An alternate conversion from dimensionless energy terms to nanoKelvin
 muKelvin_conv = energy_conv * (1e6 / Boltzmann)         #Converts Joules energy terms to microKelvin
-alt_muKevlin_conv = hbar * 1e6 / (Omeg_x * Boltzmann)   #An alternate conversion from dimensionless energy terms to nanoKelvin
+alt_muKevlin_conv = hbar * Omeg_x * 1e6 / Boltzmann     #An alternate conversion from dimensionless energy terms to microKelvin
+muK_calc = 0.00239962237                                #Calculated convertion to microKelvin
 specvol_conv = (L_x * L_y * L_z) / N                    #Converts unit-less spacial terms into specific volume: m^3 per particle
 specvol_nm = specvol_conv * 1e27                        #Converts m^3 per particle spacial terms into nanometers^3 per particle
 time_conv = m * L_x ** 2 * (1. / hbar) * 1e3            #Converts characteristic time into milliseconds
@@ -41,17 +42,19 @@ xmum_conv = L_x * 1e6                                   #converts dimensionless 
 dens_conv = 1e-18 / (L_x * L_y * L_z)                   #converts dimensionless wave function into units of micrometers^-3
 
 #In program calculation of the dimensionless interaction parameter
-g = 2 * N * L_x * m * a_s * np.sqrt(Omeg_y * Omeg_z) * (1. / hbar)
+g = 2 * N * L_x * m * a_s * np.sqrt(Omeg_y * Omeg_z) / hbar
 #Hand Calculated dimensionless interaction parameter
 #g = 2194.449140
 
 propagation_dt = 1e-4
 
 #height of asymmetric barrier
-height_asymmetric = 1e3
+height_asymmetric = 25
+#try 23.56235 for option 1 and 24.24195 for option 4
 
 #This corresponds to sharpness parameter
-delta = 3.5
+delta = 5
+#try 5 for both option 1 and 4
 
 #Increases the number of peaks for Option 2 or second peak width for Option 3
 osc = 6
@@ -67,7 +70,8 @@ def v(x, t=0.):
     #return 0.5 * x ** 2 + height_asymmetric * np.sin(osc * x) ** 2 * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 3
     #return 0.5* x ** 2 + height_asymmetric * x ** 2 * np.exp(-(x / delta) ** 2) * (x < 0) + 0.05 * height_asymmetric * x ** 2 * np.exp(-((x / osc) + 1) ** 2) * (x < 0)
-
+    #Option 4
+    #return 0.25 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 @njit
 def diff_v(x, t=0.):
     """
@@ -79,7 +83,8 @@ def diff_v(x, t=0.):
     #return x + (2 * osc * np.sin(osc * x) * np.cos(osc * x) - 2. * x * (1. / delta) ** 2 * np.sin(osc * x) ** 2) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 3
     #return x + ((x - x ** 3 * (1. / delta) ** 2) * 2 * height_asymmetric * np.exp(-(x / delta) ** 2))*(x < 0) + ((x - (x/osc + 1) * x **2 * (1. / osc)) * 0.1 * height_asymmetric * np.exp(-((x / osc) + 1) ** 2)) * (x < 0)
-
+    #Option 4
+    #return 0.5 * x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
 @njit
 def diff_k(p, t=0.):
@@ -147,7 +152,8 @@ def v_muKelvin(v):
     """"
     The potential energy with corrected units milliKelvin
     """
-    return v * muKelvin_conv
+    #return v * muKelvin_conv
+    return v * muK_calc
 
 plt.title('Potential')
 x = gpe_qsys.x * xmum_conv
@@ -352,6 +358,7 @@ def analyze_propagation(qsys, wavefunctions, title):
     t_ms = np.asarray(times) * time_conv
     plt.subplot(131)
     plt.title("Verify the first Ehrenfest theorem")
+    #plt.title("Verify the first Ehrenfest theorem", pad= Try out values tomorrow)
 
     plt.plot(
         t_ms,
@@ -399,7 +406,8 @@ def analyze_propagation(qsys, wavefunctions, title):
     )
     print("Initial energy {:.4e}".format(h[0]))
 
-    plt.plot(t_ms, h * muKelvin_conv)
+    #plt.plot(t_ms, h * muKelvin_conv)
+    plt.plot(t_ms, h * muK_calc)
     plt.ylabel('energy ($\mu$K)')
     plt.xlabel('time $t$ (ms)')
 

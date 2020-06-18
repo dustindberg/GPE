@@ -5,12 +5,17 @@ import numpy as np
 from scipy.constants import hbar, proton_mass, Boltzmann
 from scipy.interpolate import UnivariateSpline
 from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D # class for the split operator propagation
+import datetime
+import pytz
+
 
 ########################################################################################################################
 #
 #Define the parameters for interaction and potential
 #
 ########################################################################################################################
+
+Start_time = datetime.datetime.now(pytz.timezone('US/Central'))
 
 #Physical Values
 N = 1e4                                                 #number of particles
@@ -24,13 +29,16 @@ L_z = np.sqrt(hbar / (m * Omeg_z))                      #Characteristic length i
 a_s = 100 * 5.291772109e-11                             #scattering length also in meters
 
 #Converstion Factors
-energy_conv  = (hbar ** 2) / (L_x ** 2 * m)             #Converts unit-less energy terms to joules
+energy_conv  = ((hbar) / (L_x * np.sqrt(m))) **2        #Converts unit-less energy terms to joules
 nKelvin_conv = energy_conv * (1e9 / Boltzmann)          #Converts Joules energy terms to nanoKelvin
-muKelvin_conv = energy_conv * (1e3 / Boltzmann)         #Converts Joules energy terms to microKelvin
+alt_nKevlin_conv = hbar * 1e9 / (Omeg_x * Boltzmann)    #An alternate conversion from dimensionless energy terms to nanoKelvin
+muKelvin_conv = energy_conv * (1e6 / Boltzmann)         #Converts Joules energy terms to microKelvin
+alt_muKevlin_conv = hbar * 1e6 / (Omeg_x * Boltzmann)   #An alternate conversion from dimensionless energy terms to nanoKelvin
 specvol_conv = (L_x * L_y * L_z) / N                    #Converts unit-less spacial terms into specific volume: m^3 per particle
 specvol_nm = specvol_conv * 1e27                        #Converts m^3 per particle spacial terms into nanometers^3 per particle
 time_conv = m * L_x ** 2 * (1. / hbar) * 1e3            #Converts characteristic time into milliseconds
-
+xmum_conv = L_x * 1e6                                   #converts dimensionless x coordinate into micrometers
+dens_conv = 1e-18 / (L_x * L_y * L_z)                   #converts dimensionless wave function into units of micrometers^-3
 
 #In program calculation of the dimensionless interaction parameter
 g = 2 * N * L_x * m * a_s * np.sqrt(Omeg_y * Omeg_z) * (1. / hbar)
@@ -40,7 +48,7 @@ g = 2 * N * L_x * m * a_s * np.sqrt(Omeg_y * Omeg_z) * (1. / hbar)
 propagation_dt = 1e-4
 
 #height of asymmetric barrier
-height_asymmetric = 120
+height_asymmetric = 1e3
 
 #This corresponds to sharpness parameter
 delta = 3.5
@@ -118,7 +126,36 @@ params = dict(
     # epsilon=1e-2,
 )
 
+########################################################################################################################
+#
+# Plot the potential
+#
+########################################################################################################################
 
+#Change units to miliKelvin, move def function here
+#plot this here
+
+gpe_qsys = SplitOpGPE1D(
+    v=v,
+    g=g,
+    dt=propagation_dt,
+    **params
+)
+
+@njit
+def v_muKelvin(v):
+    """"
+    The potential energy with corrected units milliKelvin
+    """
+    return v * muKelvin_conv
+
+plt.title('Potential')
+x = gpe_qsys.x * xmum_conv
+plt.plot(x, v_muKelvin(v(x)))
+plt.xlabel('$x$ ($\mu$m) ')
+plt.ylabel('$V(x)$ ($\mu$K)')
+plt.xlim([-80 * xmum_conv,80 * xmum_conv])
+plt.show()
 
 ########################################################################################################################
 #
@@ -236,21 +273,21 @@ rhs = tf_test(mu, initial_trap(x), g)
 lhs = np.abs(init_state) ** 2
 
 #TF Approx plot
-plt.plot(x, rhs, label='Thomas Fermi')
-plt.plot(x, lhs, label='GPE')
-plt.xlim([-40, 0])
+plt.plot((x * xmum_conv), (rhs * dens_conv), label='Thomas Fermi')
+plt.plot((x * xmum_conv), (lhs * dens_conv), label='GPE')
+plt.xlim([(-35 * xmum_conv) , (-5 * xmum_conv)])
 plt.legend(numpoints=1)
-plt.xlabel('$x * 6.5568e5 m$')
-plt.ylabel('Density * 2.8189e18 m^-3')
+plt.xlabel('$x$ ($\mu$m)')
+plt.ylabel('Density ($\mu$m^-3)')
 plt.show()
 
 #TF Approx plot normalized to 1
-plt.plot(x, rhs/rhs.max(), label='Thomas Fermi normalized to 1')
-plt.plot(x, lhs/lhs.max(), label='GPE normalized to 1')
-plt.xlim([-40, 0])
+plt.plot(x * xmum_conv, rhs/rhs.max(), label='Thomas Fermi normalized to 1')
+plt.plot((x * xmum_conv), lhs/lhs.max(), label='GPE normalized to 1')
+plt.xlim([-35 * xmum_conv, -5 * xmum_conv])
 plt.legend(numpoints=1)
-plt.xlabel('$x * 6.5568e5 m$')
-plt.ylabel('Density * 2.8189e18 m^-3')
+plt.xlabel('$x$ ($\mu$m)')
+plt.ylabel('Density (dimensionless)')
 plt.show()
 
 #Flip the initial conditions
@@ -258,21 +295,21 @@ rhs = tf_test(mu_flip, flipped_initial_trap(x, 0), g)
 lhs = np.abs(flipped_init_state) ** 2
 
 #TF Approx plot flipped
-plt.plot(x, rhs, label='Thomas Fermi')
-plt.plot(x, lhs, label='Flipped GPE')
-plt.xlim([0, 40])
+plt.plot(x * xmum_conv, rhs * dens_conv, label='Thomas Fermi')
+plt.plot(x * xmum_conv, lhs * dens_conv, label='Flipped GPE')
+plt.xlim([5 * xmum_conv, 35 * xmum_conv])
 plt.legend(numpoints=1)
-plt.xlabel('$x * 6.5568e5 m$')
-plt.ylabel('Density * 2.8189e18 m^-3')
+plt.xlabel('$x$ ($\mu$m)')
+plt.ylabel('Density $\mu$m^-3')
 plt.show()
 
 #TF Approx plot flipped and normalized to 1
-plt.plot(x, rhs/rhs.max(), label='Thomas Fermi normalized to 1')
-plt.plot(x, lhs/lhs.max(), label='Flipped GPE normalized to 1')
-plt.xlim([0, 40])
+plt.plot(x * xmum_conv, rhs/rhs.max(), label='Thomas Fermi normalized to 1')
+plt.plot(x * xmum_conv, lhs/lhs.max(), label='Flipped GPE normalized to 1')
+plt.xlim([5 * xmum_conv, 35 * xmum_conv])
 plt.legend(numpoints=1)
-plt.xlabel('$x * 6.5568e5 m$')
-plt.ylabel('Density * 2.8189e18 m^-3')
+plt.xlabel('$x$ ($\mu$m)')
+plt.ylabel('Density (dimensionless)')
 plt.show()
 
 
@@ -304,20 +341,20 @@ def analyze_propagation(qsys, wavefunctions, title):
         aspect=(extent[1] - extent[0]) / (extent[-1] - extent[-2]),
         norm=SymLogNorm(vmin=1e-13, vmax=1., linthresh=1e-15)
     )
-    plt.xlabel('coordinate $x * 6.5568e5 m$')
-    plt.ylabel('time $t$ * 3.1831 ms')
+    plt.xlabel('coordinate $x$ (a.u.)')
+    plt.ylabel('time $t$ (a.u.)')
     plt.colorbar()
     plt.savefig(title + '.pdf')
 
     plt.show()
 
     times = qsys.times
-
+    t_ms = np.asarray(times) * time_conv
     plt.subplot(131)
     plt.title("Verify the first Ehrenfest theorem")
 
     plt.plot(
-        times,
+        t_ms,
         # calculate the derivative using the spline interpolation
         # because times is not a linearly spaced array
         UnivariateSpline(times, qsys.x_average, s=0).derivative()(times),
@@ -325,30 +362,30 @@ def analyze_propagation(qsys, wavefunctions, title):
         label='$d\\langle\\hat{x}\\rangle / dt$'
     )
     plt.plot(
-        times,
+        t_ms,
         qsys.x_average_rhs,
         '--b',
         label='$\\langle\\hat{p}\\rangle$'
     )
     plt.legend()
     plt.ylabel('momentum')
-    plt.xlabel('time $t$ * 3.1831e-3 s')
+    plt.xlabel('time $t$ (ms)')
 
     plt.subplot(132)
     plt.title("Verify the second Ehrenfest theorem")
 
     plt.plot(
-        times,
+        t_ms,
         # calculate the derivative using the spline interpolation
         # because times is not a linearly spaced array
         UnivariateSpline(times, qsys.p_average, s=0).derivative()(times),
         '-r',
         label='$d\\langle\\hat{p}\\rangle / dt$'
     )
-    plt.plot(qsys.times, qsys.p_average_rhs, '--b', label='$\\langle -U\'(\\hat{x})\\rangle$')
+    plt.plot(t_ms, qsys.p_average_rhs, '--b', label='$\\langle -U\'(\\hat{x})\\rangle$')
     plt.legend()
     plt.ylabel('force')
-    plt.xlabel('time $t$ * 3.1831e-3 s')
+    plt.xlabel('time $t$ (ms)')
 
     plt.subplot(133)
     plt.title("The expectation value of the hamiltonian")
@@ -362,9 +399,9 @@ def analyze_propagation(qsys, wavefunctions, title):
     )
     print("Initial energy {:.4e}".format(h[0]))
 
-    plt.plot(times, h)
-    plt.ylabel('energy * 2.3996 nK')
-    plt.xlabel('time $t$ * 3.1831e-3 s')
+    plt.plot(t_ms, h * muKelvin_conv)
+    plt.ylabel('energy ($\mu$K)')
+    plt.xlabel('time $t$ (ms)')
 
     plt.show()
 
@@ -388,12 +425,13 @@ gpe_qsys = SplitOpGPE1D(
     g=g,
     dt=propagation_dt,
     **params
-).set_wavefunction(init_state)
+)
+gpe_qsys.set_wavefunction(init_state)
 
 # get time duration of 2 periods
-T = 1. * 2. * np.pi
+T = 2. * 2. * np.pi
 times = np.linspace(0, T, 500)
-
+t_msplot = times * time_conv
 # propagate till time T and for each time step save a probability density
 gpe_wavefunctions = [
      gpe_qsys.propagate(t).copy() for t in times
@@ -497,57 +535,38 @@ x_cut_flipped = int(0.4 * gpe_qsys.wavefunction.size)
 
 plt.subplot(121)
 plt.plot(
-    times,
+    t_msplot,
     np.sum(np.abs(schrodinger_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
     label='Schrodinger'
 )
 plt.plot(
-    times,
+    t_msplot,
     np.sum(np.abs(flipped_schrodinger_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1) * dx,
     label='Flipped Schrodinger'
 )
 plt.legend()
-plt.xlabel('time $t$ * 3.1831 ms')
+plt.xlabel('time $t$ (ms)')
 plt.ylabel("transmission probability")
 
 plt.subplot(122)
 plt.plot(
-    times,
+    t_msplot,
     np.sum(np.abs(gpe_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
     label='GPE'
 )
 plt.plot(
-    times,
+    t_msplot,
     np.sum(np.abs(flipped_gpe_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1) * dx,
     label='Flipped GPE'
 )
 plt.legend()
-plt.xlabel('time $t$ * 3.1831e ms')
+plt.xlabel('time $t$ (ms)')
 plt.ylabel("transmission probability")
 
 plt.show()
 
-########################################################################################################################
-#
-# Plot the potential
-#
-########################################################################################################################
+End_time = datetime.datetime.now(pytz.timezone('US/Central'))
 
-#Change units to miliKelvin, move def function here
-
-@njit
-def v_muKelvin(v):
-    """"
-    The potential energy with corrected units milliKelvin
-    """
-    return v * muKelvin_conv
-
-plt.title('Potential')
-x = gpe_qsys.x
-plt.plot(x, v_muKelvin(v(x)))
-plt.xlabel('$x * 1.525\mu m$ ')
-plt.ylabel('$V(x)$ \mu K')
-plt.show()
-
-
+print ("Start time: {}:{}:{}".format(Start_time.hour,Start_time.minute,Start_time.second))
+print ("End time: {}:{}:{}".format(End_time.hour, End_time.minute, End_time.second))
 

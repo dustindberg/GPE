@@ -26,35 +26,43 @@ Omeg_z = 500 * 2 * np.pi                                #Harmonic oscillation in
 L_x = np.sqrt(hbar / (m * Omeg_x))                      #Characteristic length in the x-direction in meters
 L_y = np.sqrt(hbar / (m * Omeg_y))                      #Characteristic length in the y-direction in meters
 L_z = np.sqrt(hbar / (m * Omeg_z))                      #Characteristic length in the z-direction in meters
-a_s = 100 * 5.291772109e-11                             #scattering length also in meters
+a_s = 5.291772109e-9                                    #Scattering length also in meters, from 100 * 5.291772109e-11
+L_xmum = np.sqrt(hbar / (m * Omeg_x))                   #Characteristic length in the x-direction in meters
+L_ymum = np.sqrt(hbar / (m * Omeg_y))                   #Characteristic length in the y-direction in meters
+L_zmum = np.sqrt(hbar / (m * Omeg_z))
 
 #Converstion Factors
-energy_conv  = hbar ** 2 / (m * L_x ** 2)                #Converts unit-less energy terms to joules
-nKelvin_conv = energy_conv * (1e9 / Boltzmann)          #Converts Joules energy terms to nanoKelvin
-alt_nKevlin_conv = hbar * Omeg_x * 1e9 / Boltzmann      #An alternate conversion from dimensionless energy terms to nanoKelvin
-muKelvin_conv = energy_conv * (1e6 / Boltzmann)         #Converts Joules energy terms to microKelvin
-alt_muKevlin_conv = hbar * Omeg_x * 1e6 / Boltzmann     #An alternate conversion from dimensionless energy terms to microKelvin
-muK_calc = 0.00239962237                                #Calculated convertion to microKelvin
-specvol_conv = (L_x * L_y * L_z) / N                    #Converts unit-less spacial terms into specific volume: m^3 per particle
-specvol_nm = specvol_conv * 1e27                        #Converts m^3 per particle spacial terms into nanometers^3 per particle
-time_conv = m * L_x ** 2 * (1. / hbar) * 1e3            #Converts characteristic time into milliseconds
-xmum_conv = L_x * 1e6                                   #converts dimensionless x coordinate into micrometers
-dens_conv = 1e-18 / (L_x * L_y * L_z)                   #converts dimensionless wave function into units of micrometers^-3
+energy_conv  = hbar ** 2 / (m * L_x ** 2)                   #Converts unit-less energy terms to joules
+nKelvin_conv = energy_conv * (1e9 / Boltzmann)              #Converts Joules energy terms to nanoKelvin
+alt_nKevlin_conv = hbar * Omeg_x * 1e9 / Boltzmann          #An alternate conversion from dimensionless energy terms to nanoKelvin
+muKelvin_conv = energy_conv * (1e6 / Boltzmann)             #Converts Joules energy terms to microKelvin
+alt_muKevlin_conv = hbar * Omeg_x * 1e6 / Boltzmann         #An alternate conversion from dimensionless energy terms to microKelvin
+muK_calc = 0.00239962237                                    #Calculated convertion to microKelvin
+specvol_conv = (L_x * L_y * L_z) / N                        #Converts unit-less spacial terms into specific volume: m^3 per particle
+specvol_nm = specvol_conv * 1e27                            #Converts m^3 per particle spacial terms into nanometers^3 per particle
+time_conv = m * L_x ** 2 * (1. / hbar) * 1e3                #Converts characteristic time into milliseconds
+xmum_conv = L_x * 1e6                                       #converts dimensionless x coordinate into micrometers
+dens_conv = 1e-18 / (L_x * L_y * L_z)                       #converts dimensionless wave function into units of micrometers^-3
+dens_convcalc = 1. / (1.525161 * 0.48228723 * 0.48228723)   #calculated version of density unit conversion
 
 #In program calculation of the dimensionless interaction parameter
 g = 2 * N * L_x * m * a_s * np.sqrt(Omeg_y * Omeg_z) / hbar
 #Hand Calculated dimensionless interaction parameter
+#g_calc =
 #g = 2194.449140
 
 propagation_dt = 1e-4
 
 #height of asymmetric barrier
-height_asymmetric = 25
-#try 23.56235 for option 1 and 24.24195 for option 4
+height_asymmetric = 44
+#for ~550 nK, try 25 for #1 and 24.24195 for #4 at delta=5
+#for ~800 nK, try 72.61931 for #1 at delta = 3.5, try 34.8903 for delta = 5
+#for ~1microK, try 91.1142 for #1 at delta = 3.5, try 43.9528 for delta = 5
+
 
 #This corresponds to sharpness parameter
 delta = 5
-#try 5 for both option 1 and 4
+
 
 #Increases the number of peaks for Option 2 or second peak width for Option 3
 osc = 6
@@ -119,7 +127,7 @@ def k(p, t=0.):
 
 # save parameters as a separate bundle
 params = dict(
-    x_grid_dim=16 * 1024,
+    x_grid_dim=8 * 1024,
     #for faster testing, change x_grid_dim to 8*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy. 8 should be used for bulk testing of code with needed accuracy
     x_amplitude=80.,
 
@@ -279,8 +287,8 @@ rhs = tf_test(mu, initial_trap(x), g)
 lhs = np.abs(init_state) ** 2
 
 #TF Approx plot
-plt.plot((x * xmum_conv), (rhs * dens_conv), label='Thomas Fermi')
-plt.plot((x * xmum_conv), (lhs * dens_conv), label='GPE')
+plt.plot((x * xmum_conv), (rhs * dens_convcalc), label='Thomas Fermi')
+plt.plot((x * xmum_conv), (lhs * dens_convcalc), label='GPE')
 plt.xlim([(-35 * xmum_conv) , (-5 * xmum_conv)])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
@@ -301,8 +309,8 @@ rhs = tf_test(mu_flip, flipped_initial_trap(x, 0), g)
 lhs = np.abs(flipped_init_state) ** 2
 
 #TF Approx plot flipped
-plt.plot(x * xmum_conv, rhs * dens_conv, label='Thomas Fermi')
-plt.plot(x * xmum_conv, lhs * dens_conv, label='Flipped GPE')
+plt.plot(x * xmum_conv, rhs * dens_convcalc, label='Thomas Fermi')
+plt.plot(x * xmum_conv, lhs * dens_convcalc, label='Flipped GPE')
 plt.xlim([5 * xmum_conv, 35 * xmum_conv])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')

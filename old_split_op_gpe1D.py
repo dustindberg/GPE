@@ -1,29 +1,24 @@
 import numpy as np
-import pyfftw
-import pickle
+from scipy import fft, ifft  # Tools for fourier transform
 from numpy import linalg  # Linear algebra for dense matrix
-from numba import njit
-from numba.targets.registry import CPUDispatcher
+from numba import njit, jit
+from numba.core.registry import CPUDispatcher
 from types import FunctionType
-from multiprocessing import cpu_count
 
-#Potentially try reducing cpu count
 
-def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=None, epsilon=1e-7,
-                    abs_boundary=1., fftw_wisdom_fname='fftw.wisdom', **kwargs):
+def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, epsilon=1e-7, abs_boundary=1., **kwargs):
     """
-    Imaginary time propagator to get the ground state and chemical potential
+    Imaginary time propagator to get the ground state
 
     :param x_grid_dim: the grid size
     :param x_amplitude: the maximum value of the coordinates
     :param v: the potential energy (as a function)
     :param k: the kinetic energy (as a function)
     :param dt: initial time increment
-    :param init_wavefunction: initial guess for wavefunction
+    :param wavefunction: initial guess for wavefunction
     :param g: the coupling constant
     :param epsilon: relative error tolerance
     :param abs_boundary: absorbing boundary
-    :param fftw_wisdom_fname: File name from where the FFT wisdom will be loaded from and saved to
     :param kwargs: ignored
 
     :return: wavefunction, chemical potential
@@ -35,54 +30,6 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
     assert 2 ** int(np.log2(x_grid_dim)) == x_grid_dim, \
         "A value of the grid size (x_grid_dim) must be a power of 2"
 
-    ####################################################################################################
-    #
-    #   Initialize Fourier transform for efficient calculations
-    #
-    ####################################################################################################
-
-    # Load the FFTW wisdom
-    try:
-        with open(fftw_wisdom_fname, 'rb') as fftw_wisdow:
-            pyfftw.import_wisdom(pickle.load(fftw_wisdow))
-    except FileNotFoundError:
-        pass
-
-    # allocate the array for wave function
-    wavefunction = pyfftw.empty_aligned(x_grid_dim, dtype=np.complex)
-
-    # allocate the array for wave function in momentum representation
-    wavefunction_p = pyfftw.empty_aligned(x_grid_dim, dtype=np.complex)
-
-    # allocate the array for calculating the momentum representation for the energy evaluation
-    wavefunction_p_ = pyfftw.empty_aligned(x_grid_dim, dtype=np.complex)
-
-    # parameters for FFT
-    fft_params = {
-        "flags": ('FFTW_MEASURE', 'FFTW_DESTROY_INPUT'),
-        "threads": cpu_count(),
-        "planning_timelimit": 60,
-    }
-
-    # FFT
-    fft = pyfftw.FFTW(wavefunction, wavefunction_p, **fft_params)
-
-    # iFFT
-    ifft = pyfftw.FFTW(wavefunction_p, wavefunction, direction='FFTW_BACKWARD', **fft_params)
-
-    # fft for momentum representation
-    fft_p = pyfftw.FFTW(wavefunction_p, wavefunction_p_, **fft_params)
-
-    # Save the FFTW wisdom
-    with open(fftw_wisdom_fname, 'wb') as fftw_wisdow:
-        pickle.dump(pyfftw.export_wisdom(), fftw_wisdow)
-
-    ####################################################################################################
-    #
-    #   Initialize grids
-    #
-    ####################################################################################################
-
     # get coordinate step size
     dx = 2. * x_amplitude / x_grid_dim
 
@@ -91,9 +38,6 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
 
     # generate momentum range as it corresponds to FFT frequencies
     p = (np.arange(x_grid_dim) - x_grid_dim / 2) * (np.pi / x_amplitude)
-
-    # tha array of alternating signs for going to the momentum representation
-    minues = (-1) ** np.arange(x_grid_dim)
 
     # evaluate the potential energy
     v = v(x, 0.)
@@ -111,7 +55,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
     img_exp_k = np.exp(-dt * k)
 
     # initial guess for the wave function
-    wavefunction[:] = (np.exp(-v) + 0j if init_wavefunction is None else init_wavefunction)
+    wavefunction = (np.exp(-v) + 0j if wavefunction is None else wavefunction)
 
     @njit
     def exp_potential(psi):
@@ -124,10 +68,10 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
         psi /= linalg.norm(psi) * np.sqrt(dx)
         psi *= np.exp(-0.5 * dt * g * np.abs(psi) ** 2)
 
-    @njit
-    def get_energy(psi, pis_p):
+    @jit
+    def get_energy(psi):
         """
-        Calculate the energy for a given wave function and its momentum representaion
+        Calculate the energy for a given wave function
         :return: float
         """
         density = np.abs(psi) ** 2
@@ -136,7 +80,9 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
         energy = np.sum((v + 0.5 * g * density / dx) * density)
 
         # get momentum density
-        density = np.abs(pis_p) ** 2
+        density = np.abs(
+            fft.fft((-1) ** np.arange(x_grid_dim) * psi, overwrite_x=True)
+        ) ** 2
         density /= density.sum()
 
         energy += np.sum(k * density)
@@ -153,12 +99,12 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
         exp_potential(wavefunction)
 
         # going to the momentum representation
-        wavefunction_p = fft(wavefunction)
+        wavefunction = fft.fft(wavefunction, overwrite_x=True)
 
-        wavefunction_p *= img_exp_k
+        wavefunction *= img_exp_k
 
         # going back to the coordinate representation
-        wavefunction = ifft(wavefunction_p)
+        wavefunction = fft.ifft(wavefunction, overwrite_x=True)
 
         exp_potential(wavefunction)
 
@@ -167,14 +113,8 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
         # save previous energy
         energy_previous = (energy if energy else np.infty)
 
-        # get the wave function in the momentum representation for getting the energy
-        #wavefunction_p[:] = wavefunction
-        np.copyto(wavefunction_p, wavefunction)
-        wavefunction_p *= minues
-        wavefunction_p_ = fft_p(wavefunction_p)
-
         # calculate the energy
-        energy = get_energy(wavefunction, wavefunction_p_)
+        energy = get_energy(wavefunction)
 
         # print progress report
         if counter % 2000 == 0:
@@ -215,20 +155,21 @@ class SplitOpGPE1D(object):
     """
     def __init__(self, *, x_grid_dim, x_amplitude, v, k, dt, g,
                  epsilon=1e-2, diff_k=None, diff_v=None, t=0, abs_boundary=1.,
-                 fftw_wisdom_fname='fftw.wisdom', **kwargs):
+                 time_independent_v=True, time_independent_k=True, **kwargs):
         """
         :param x_grid_dim: the grid size
         :param x_amplitude: the maximum value of the coordinates
         :param v: the potential energy (as a function)
         :param k: the kinetic energy (as a function)
         :param diff_k: the derivative of the potential energy for the Ehrenfest theorem calculations
+        :param time_independent_v: boolean flag indicated weather potential is time dependent (default is True)
         :param diff_v: the derivative of the kinetic energy for the Ehrenfest theorem calculations
+        :param time_independent_k: boolean flag indicated weather kinetic energy is time dependent (default is True)
         :param t: initial value of time
         :param dt: initial time increment
         :param g: the coupling constant
         :param epsilon: relative error tolerance
         :param abs_boundary: absorbing boundary
-        :param fftw_wisdom_fname: File name from where the FFT wisdom will be loaded from and saved to
         :param kwargs: ignored
         """
 
@@ -243,57 +184,6 @@ class SplitOpGPE1D(object):
         self.g = g
         self.epsilon = epsilon
         self.abs_boundary = abs_boundary
-
-        ####################################################################################################
-        #
-        #   Initialize Fourier transform for efficient calculations
-        #
-        ####################################################################################################
-
-        # Load the FFTW wisdom
-        try:
-            with open(fftw_wisdom_fname, 'rb') as fftw_wisdow:
-                pyfftw.import_wisdom(pickle.load(fftw_wisdow))
-        except FileNotFoundError:
-            pass
-
-        # allocate the array for wave function
-        self.wavefunction = pyfftw.empty_aligned(x_grid_dim, dtype=np.complex)
-
-        # allocate an extra copy for the wavefunction necessary for adaptive time step propagation
-        self.wavefunction_next = pyfftw.empty_aligned(self.x_grid_dim, dtype=np.complex)
-
-        # allocate the array for wave function in momentum representation
-        self.wavefunction_next_p = pyfftw.empty_aligned(x_grid_dim, dtype=np.complex)
-
-        # allocate the array for calculating the momentum representation for the energy evaluation
-        self.wavefunction_next_p_ = pyfftw.empty_aligned(x_grid_dim, dtype=np.complex)
-
-        # parameters for FFT
-        self.fft_params = {
-            "flags": ('FFTW_MEASURE', 'FFTW_DESTROY_INPUT'),
-            "threads": cpu_count(),
-            "planning_timelimit": 60,
-        }
-
-        # FFT
-        self.fft = pyfftw.FFTW(self.wavefunction_next, self.wavefunction_next_p, **self.fft_params)
-
-        # iFFT
-        self.ifft = pyfftw.FFTW(self.wavefunction_next_p, self.wavefunction_next, direction='FFTW_BACKWARD', **self.fft_params)
-
-        # fft for momentum representation
-        self.fft_p = pyfftw.FFTW(self.wavefunction_next_p, self.wavefunction_next_p_, **self.fft_params)
-
-        # Save the FFTW wisdom
-        with open(fftw_wisdom_fname, 'wb') as fftw_wisdow:
-            pickle.dump(pyfftw.export_wisdom(), fftw_wisdow)
-
-        ####################################################################################################
-        #
-        #   Initialize grids
-        #
-        ####################################################################################################
 
         # Check that all attributes were specified
         # make sure self.x_amplitude has a value of power of 2
@@ -311,6 +201,12 @@ class SplitOpGPE1D(object):
         # generate momentum range as it corresponds to FFT frequencies
         p = self.p = (np.arange(self.x_grid_dim) - self.x_grid_dim / 2) * (np.pi / self.x_amplitude)
 
+        # allocate the array for wavefunction
+        self.wavefunction = np.zeros(self.x.size, dtype=np.complex)
+
+        # allocate an extra copy for the wavefunction necessary for adaptive time step propagation
+        self.wavefunction_next = np.zeros_like(self.wavefunction)
+
         # the relative change estimators for the time adaptive scheme
         self.e_n = self.e_n_1 = self.e_n_2 = 0
 
@@ -325,20 +221,6 @@ class SplitOpGPE1D(object):
         #
         ####################################################################################################
 
-        # Decide whether the potential depends on time
-        try:
-            v(x, 0)
-            time_independent_v = False
-        except TypeError:
-            time_independent_v = True
-
-        # Decide whether the kinetic energy depends on time
-        try:
-            k(p, 0)
-            time_independent_k = False
-        except TypeError:
-            time_independent_k = True
-
         # pre-calculate the absorbing potential and the sequence of alternating signs
 
         abs_boundary = (abs_boundary if isinstance(abs_boundary, (float, int)) else abs_boundary(x))
@@ -349,10 +231,16 @@ class SplitOpGPE1D(object):
             pre_calculated_v = v(x, 0.)
             v = njit(lambda _, __: pre_calculated_v)
 
+            pre_calculated_diff_v = diff_v(x, 0.)
+            diff_v = njit(lambda _, __: pre_calculated_diff_v)
+
         # Cache the kinetic energy if it does not depend on time
         if time_independent_k:
             pre_calculated_k = k(p, 0.)
             k = njit(lambda _, __: pre_calculated_k)
+
+            pre_calculated_diff_k = diff_k(p, 0.)
+            diff_k = njit(lambda _, __: pre_calculated_diff_k)
 
         @njit
         def expV(wavefunction, t, dt):
@@ -378,16 +266,6 @@ class SplitOpGPE1D(object):
 
         # Check whether the necessary terms are specified to calculate the first-order Ehrenfest theorems
         if diff_k and diff_v:
-
-            # Cache the potential if it does not depend on time
-            if time_independent_v:
-                pre_calculated_diff_v = diff_v(x, 0.)
-                diff_v = njit(lambda _, __: pre_calculated_diff_v)
-
-            # Cache the kinetic energy if it does not depend on time
-            if time_independent_k:
-                pre_calculated_diff_k = diff_k(p, 0.)
-                diff_k = njit(lambda _, __: pre_calculated_diff_k)
 
             # Get codes for efficiently calculating the Ehrenfest relations
 
@@ -444,6 +322,9 @@ class SplitOpGPE1D(object):
             # List where the expectation value of the Hamiltonian will be calculated
             self.hamiltonian_average = []
 
+            # Allocate array for storing coordinate or momentum density of the wavefunction
+            self.density = np.zeros_like(self.wavefunction)
+
             # sequence of alternating signs for getting the wavefunction in the momentum representation
             self.minus = (-1) ** np.arange(self.x_grid_dim)
 
@@ -464,9 +345,6 @@ class SplitOpGPE1D(object):
         e_n_2 = self.e_n_2
         previous_dt = self.previous_dt
 
-        # copy the initial condition into the propagation array self.wavefunction_next
-        np.copyto(self.wavefunction_next, self.wavefunction)
-
         while self.t < time_final:
 
             ############################################################################################################
@@ -476,7 +354,8 @@ class SplitOpGPE1D(object):
             ############################################################################################################
 
             # propagate the wavefunction by a single dt
-            self.single_step_propagation(self.dt)
+            np.copyto(self.wavefunction_next, self.wavefunction)
+            self.wavefunction_next = self.single_step_propagation(self.dt, self.wavefunction_next)
 
             e_n = relative_diff(self.wavefunction_next, self.wavefunction)
 
@@ -486,12 +365,12 @@ class SplitOpGPE1D(object):
                 self.dt *= self.epsilon / e_n
 
                 np.copyto(self.wavefunction_next, self.wavefunction)
-                self.single_step_propagation(self.dt)
+                self.wavefunction_next = self.single_step_propagation(self.dt, self.wavefunction_next)
 
                 e_n = relative_diff(self.wavefunction_next, self.wavefunction)
 
             # accept the current wave function
-            np.copyto(self.wavefunction, self.wavefunction_next)
+            self.wavefunction, self.wavefunction_next = self.wavefunction_next, self.wavefunction
 
             # save self.dt for monitoring purpose
             self.time_incremenets.append(self.dt)
@@ -532,27 +411,26 @@ class SplitOpGPE1D(object):
 
         return self.wavefunction
 
-    def single_step_propagation(self, dt):
+    def single_step_propagation(self, dt, wavefunction):
         """
-        Propagate the wavefunction, saved in self.wavefunction_next, by a single time-step
+        Propagate the wavefunction by a single time-step
         :param dt: time-step
-        :return: None
+        :param wavefunction: 1D numpy array
+        :return: wavefunction
         """
-        wavefunction = self.wavefunction_next
-
         # efficiently evaluate
         #   wavefunction *= (-1) ** k * exp(-0.5j * dt * v)
         self.expV(wavefunction, self.t, dt)
 
         # going to the momentum representation
-        wavefunction = self.fft(wavefunction)
+        wavefunction = fft.fft(wavefunction, overwrite_x=True)
 
         # efficiently evaluate
         #   wavefunction *= exp(-1j * dt * k)
         self.expK(wavefunction, self.t, dt)
 
         # going back to the coordinate representation
-        wavefunction = self.ifft(wavefunction)
+        wavefunction = fft.ifft(wavefunction, overwrite_x=True)
 
         # efficiently evaluate
         #   wavefunction *= (-1) ** k * exp(-0.5j * dt * v)
@@ -563,13 +441,15 @@ class SplitOpGPE1D(object):
         # self.wavefunction /= np.sqrt(np.sum(np.abs(self.wavefunction) ** 2 ) * self.dx)
         wavefunction /= linalg.norm(wavefunction) * np.sqrt(self.dx)
 
+        return wavefunction
+
     def get_ehrenfest(self):
         """
         Calculate observables entering the Ehrenfest theorems
         """
         if self.is_ehrenfest:
             # alias
-            density = self.wavefunction_next_p
+            density = self.density
 
             # evaluate the coordinate density
             np.abs(self.wavefunction, out=density)
@@ -578,23 +458,17 @@ class SplitOpGPE1D(object):
             density /= density.sum()
 
             # save the current value of <x>
-            self.x_average.append(
-                self.get_x_average(density.real)
-            )
+            self.x_average.append(self.get_x_average(density.real))
 
-            self.p_average_rhs.append(
-                -self.get_p_average_rhs(density.real, self.t)
-            )
+            self.p_average_rhs.append(-self.get_p_average_rhs(density.real, self.t))
 
             # save the potential energy
-            self.hamiltonian_average.append(
-                self.get_v_average(density.real, self.t)
-            )
+            self.hamiltonian_average.append(self.get_v_average(density.real, self.t))
 
             # calculate density in the momentum representation
             np.copyto(density, self.wavefunction)
             density *= self.minus
-            density = self.fft_p(density)
+            density = fft.fft(density, overwrite_x=True)
 
             # get the density in the momentum space
             np.abs(density, out=density)

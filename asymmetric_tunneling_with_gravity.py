@@ -32,6 +32,7 @@ L_xmum = np.sqrt(1.0515718 / (14.431609 * Omeg_x)) * 100    #Externally calcilat
 L_ymum = np.sqrt(1.0515718 / (14.431609 * Omeg_y)) * 100    #Externally calcilated characteristic length in the y-direction in micrometers
 L_zmum = np.sqrt(1.0515718 / (14.431609 * Omeg_z)) * 100    #Externally calcilated characteristic length in the z-direction in micrometers
 muK_calc = 0.00239962237                                    #Calculated convertion to microKelvin
+nK_calc = 2.39962237                                        #Calculated conversion to nanoKelvin
 specvol_mum = (L_xmum * L_ymum * L_zmum) / N                #Converts unit-less spacial terms into specific volume: micrometers^3 per particle
 dens_convcalc = 1. / (L_xmum * L_ymum * L_zmum)             #calculated version of density unit conversion
 
@@ -49,13 +50,12 @@ time_ref = m * Lx_ref ** 2 * (1. / hbar) * 1e3                  #Converts charac
 xmum_ref = Lx_ref * 1e6                                         #Converts dimensionless x coordinate into micrometers
 dens_ref = 1e-18 / (Lx_ref * Ly_ref * Lz_ref)                   #converts dimensionless wave function into units of micrometers^-3
 g_ref = 2 * N * Lx_ref * m * a_s * np.sqrt(Omeg_y * Omeg_z) / hbar #In program calculation of the dimensionless interaction parameter
-
-
 Grav_reference = m ** 2 * -G * Lx_ref ** 3 / hbar ** 2          #Reference value for dimensionless gravitational potential energy
+v_0_ref = 0.5 * m ** 2 * Omeg_x ** 2 * Lx_ref ** 4 / hbar ** 2
+
+
 #Gravity to add to potential (calculated externally)
 Grav = -64.872303317
-#return 0.5 * (x - Grav) ** 2 + Grav * x + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0) potential
-#return x + Grav + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0) derivative
 
 #Hand Calculated dimensionless interaction parameter
 g = 692.956625255
@@ -81,24 +81,17 @@ def v(x, t=0.):
     Potential energy
     """
     #Option 1
-    return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
-    #Option 2
-    #return 0.5 * x ** 2 + height_asymmetric * np.sin(osc * x) ** 2 * np.exp(-(x / delta) ** 2) * (x < 0)
-    #Option 3
-    #return 0.5* x ** 2 + height_asymmetric * x ** 2 * np.exp(-(x / delta) ** 2) * (x < 0) + 0.05 * height_asymmetric * x ** 2 * np.exp(-((x / osc) + 1) ** 2) * (x < 0)
+    return 0.5 * (x - Grav) ** 2 + Grav * x + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 4
     #return 0.25 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+
 @njit
 def diff_v(x, t=0.):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
     #Option 1
-    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
-    #Option 2
-    #return x + (2 * osc * np.sin(osc * x) * np.cos(osc * x) - 2. * x * (1. / delta) ** 2 * np.sin(osc * x) ** 2) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
-    #Option 3
-    #return x + ((x - x ** 3 * (1. / delta) ** 2) * 2 * height_asymmetric * np.exp(-(x / delta) ** 2))*(x < 0) + ((x - (x/osc + 1) * x **2 * (1. / osc)) * 0.1 * height_asymmetric * np.exp(-((x / osc) + 1) ** 2)) * (x < 0)
+    return x + Grav + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 4
     #return 0.5 * x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
@@ -192,10 +185,10 @@ def initial_trap(x, t=0):
     :param x:
     :return:
     """
-    # omega = 2 * Pi * 100Hz
+
     #omega should be 2 * Pi * 50Hz
     #Convert to new Omega (leave offset of 20)
-    v_0 = 0.5 * m ** 2 * Omeg_x ** 2 * Lx_ref ** 4 * (1. / hbar ** 2)
+    v_0 = 0.49715927316426592
     return v_0 * (x + 20.) ** 2
 
 #Increase first step, and then tighten with intermediate step
@@ -288,20 +281,11 @@ def tf_test(mu, v, g):
 dx = 2. * params['x_amplitude'] / params['x_grid_dim']
 x = (np.arange(params['x_grid_dim']) - params['x_grid_dim'] / 2) * dx
 x_mum = x * L_xmum
-mu_nKelvin = mu * nK_ref                                              #Converts chemical potential to units of nanoKelvin
-g_units = g * nK_ref * specvol_mum * 2 * np.pi                        #Converts dimensionless
+mu_nKelvin = mu * nK_calc                                               #Converts chemical potential to units of nanoKelvin
+g_units = g * nK_calc * specvol_mum * 2 * np.pi                         #Converts dimensionless interaction parameter into units.
 
 rhs = tf_test(mu, initial_trap(x), g)
 lhs = np.abs(init_state) ** 2
-
-#TF Approx plot
-plt.plot((x * L_xmum), (rhs * dens_convcalc), label='Thomas Fermi')
-plt.plot((x * L_xmum), (lhs * dens_convcalc), label='GPE')
-plt.xlim([(-35 * L_xmum) , (-5 * L_xmum)])
-plt.legend(numpoints=1)
-plt.xlabel('$x$ ($\mu$m)')
-plt.ylabel('Density ($\mu$m^-3)')
-plt.show()
 
 #TF Approx plot normalized to 1
 plt.plot(x * L_xmum, rhs / rhs.max(), label='Thomas Fermi normalized to 1')
@@ -315,15 +299,6 @@ plt.show()
 #Flip the initial conditions
 rhs = tf_test(mu_flip, flipped_initial_trap(x, 0), g)
 lhs = np.abs(flipped_init_state) ** 2
-
-#TF Approx plot flipped
-plt.plot(x * L_xmum, rhs * dens_convcalc, label='Thomas Fermi')
-plt.plot(x * L_xmum, lhs * dens_convcalc, label='Flipped GPE')
-plt.xlim([5 * L_xmum, 35 * L_xmum])
-plt.legend(numpoints=1)
-plt.xlabel('$x$ ($\mu$m)')
-plt.ylabel('Density $\mu$m^-3')
-plt.show()
 
 #TF Approx plot flipped and normalized to 1
 plt.plot(x * L_xmum, rhs / rhs.max(), label='Thomas Fermi normalized to 1')

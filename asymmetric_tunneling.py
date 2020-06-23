@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize, SymLogNorm
 import numpy as np
 from scipy.constants import hbar, proton_mass, Boltzmann
+from scipy.constants import g as G
 from scipy.interpolate import UnivariateSpline
 from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D # class for the split operator propagation
 import datetime
@@ -18,18 +19,18 @@ import pytz
 Start_time = datetime.datetime.now(pytz.timezone('US/Central'))
 
 #Physical Values
-N = 1e4                                                 #number of particles
-m = 1.4431609e-25                                       #Calculated mass of 87Rb in kg
-Omeg_x = 50 * 2 * np.pi                                 #Harmonic oscillation in the x-axis in Hz
-Omeg_y = 500 * 2 * np.pi                                #Harmonic oscillation in the y-axis in Hz
-Omeg_z = 500 * 2 * np.pi                                #Harmonic oscillation in the z-axis in Hz
-L_x = np.sqrt(hbar / (m * Omeg_x))                      #Characteristic length in the x-direction in meters
-L_y = np.sqrt(hbar / (m * Omeg_y))                      #Characteristic length in the y-direction in meters
-L_z = np.sqrt(hbar / (m * Omeg_z))                      #Characteristic length in the z-direction in meters
-a_s = 5.291772109e-9                                    #Scattering length also in meters, from 100 * 5.291772109e-11
-L_xmum = np.sqrt(hbar / (m * Omeg_x))                   #Characteristic length in the x-direction in meters
-L_ymum = np.sqrt(hbar / (m * Omeg_y))                   #Characteristic length in the y-direction in meters
-L_zmum = np.sqrt(hbar / (m * Omeg_z))
+N = 1e4                                                     #number of particles
+m = 1.4431609e-25                                           #Calculated mass of 87Rb in kg
+Omeg_x = 50 * 2 * np.pi                                     #Harmonic oscillation in the x-axis in Hz
+Omeg_y = 500 * 2 * np.pi                                    #Harmonic oscillation in the y-axis in Hz
+Omeg_z = 500 * 2 * np.pi                                    #Harmonic oscillation in the z-axis in Hz
+L_x = np.sqrt(hbar / (m * Omeg_x))                          #Characteristic length in the x-direction in meters
+L_y = np.sqrt(hbar / (m * Omeg_y))                          #Characteristic length in the y-direction in meters
+L_z = np.sqrt(hbar / (m * Omeg_z))                          #Characteristic length in the z-direction in meters
+a_s = 5.291772109e-9                                        #Scattering length also in meters, from 100 * 5.291772109e-11
+L_xmum = np.sqrt(1.0515718 / (14.431609 * Omeg_x)) * 100    #Externally calcilated characteristic length in the x-direction in micrometers
+L_ymum = np.sqrt(1.0515718 / (14.431609 * Omeg_y)) * 100    #Externally calcilated characteristic length in the y-direction in micrometers
+L_zmum = np.sqrt(1.0515718 / (14.431609 * Omeg_z)) * 100    #Externally calcilated characteristic length in the z-direction in micrometers
 
 #Converstion Factors
 energy_conv  = hbar ** 2 / (m * L_x ** 2)                   #Converts unit-less energy terms to joules
@@ -40,29 +41,34 @@ alt_muKevlin_conv = hbar * Omeg_x * 1e6 / Boltzmann         #An alternate conver
 muK_calc = 0.00239962237                                    #Calculated convertion to microKelvin
 specvol_conv = (L_x * L_y * L_z) / N                        #Converts unit-less spacial terms into specific volume: m^3 per particle
 specvol_nm = specvol_conv * 1e27                            #Converts m^3 per particle spacial terms into nanometers^3 per particle
+specvol_mum = (L_xmum * L_ymum * L_zmum) / N                #Converts unit-less spacial terms into specific volume: micrometers^3 per particle
 time_conv = m * L_x ** 2 * (1. / hbar) * 1e3                #Converts characteristic time into milliseconds
-xmum_conv = L_x * 1e6                                       #converts dimensionless x coordinate into micrometers
+xmum_convcalc = L_xmum                                      #Converts dimensionless x coordinate into micrometers using externally calculated value
+xmum_conv = L_x * 1e6                                       #Converts dimensionless x coordinate into micrometers
 dens_conv = 1e-18 / (L_x * L_y * L_z)                       #converts dimensionless wave function into units of micrometers^-3
-dens_convcalc = 1. / (1.525161 * 0.48228723 * 0.48228723)   #calculated version of density unit conversion
+dens_convcalc = 1. / (L_xmum * L_ymum * L_zmum)             #calculated version of density unit conversion
+Grav_reference = m ** 2 * -G * L_x ** 3 / hbar ** 2          #Reference value for dimensionless gravitational potential energy
+
 
 #In program calculation of the dimensionless interaction parameter
-g = 2 * N * L_x * m * a_s * np.sqrt(Omeg_y * Omeg_z) / hbar
+g_reference = 2 * N * L_x * m * a_s * np.sqrt(Omeg_y * Omeg_z) / hbar
 #Hand Calculated dimensionless interaction parameter
-#g_calc =
+g = 692.956625255
 #g = 2194.449140
 
 propagation_dt = 1e-4
 
 #height of asymmetric barrier
-height_asymmetric = 44
+height_asymmetric = 35
 #for ~550 nK, try 25 for #1 and 24.24195 for #4 at delta=5
 #for ~800 nK, try 72.61931 for #1 at delta = 3.5, try 34.8903 for delta = 5
 #for ~1microK, try 91.1142 for #1 at delta = 3.5, try 43.9528 for delta = 5
 
-
 #This corresponds to sharpness parameter
 delta = 5
 
+#Gravity to add to potential (calculated externally)
+Grav = -64.872303317
 
 #Increases the number of peaks for Option 2 or second peak width for Option 3
 osc = 6
@@ -73,7 +79,7 @@ def v(x, t=0.):
     Potential energy
     """
     #Option 1
-    return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    return 0.5 * x ** 2 + Grav * x + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 2
     #return 0.5 * x ** 2 + height_asymmetric * np.sin(osc * x) ** 2 * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 3
@@ -86,7 +92,7 @@ def diff_v(x, t=0.):
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
     #Option 1
-    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    return x + Grav + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 2
     #return x + (2 * osc * np.sin(osc * x) * np.cos(osc * x) - 2. * x * (1. / delta) ** 2 * np.sin(osc * x) ** 2) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 3
@@ -164,11 +170,11 @@ def v_muKelvin(v):
     return v * muK_calc
 
 plt.title('Potential')
-x = gpe_qsys.x * xmum_conv
+x = gpe_qsys.x * xmum_convcalc
 plt.plot(x, v_muKelvin(v(x)))
 plt.xlabel('$x$ ($\mu$m) ')
 plt.ylabel('$V(x)$ ($\mu$K)')
-plt.xlim([-80 * xmum_conv,80 * xmum_conv])
+plt.xlim([-80 * xmum_convcalc, 80 * xmum_convcalc])
 plt.show()
 
 ########################################################################################################################
@@ -279,26 +285,26 @@ def tf_test(mu, v, g):
 
 dx = 2. * params['x_amplitude'] / params['x_grid_dim']
 x = (np.arange(params['x_grid_dim']) - params['x_grid_dim'] / 2) * dx
-x_mum = x * 1e6 * (1. / L_x)
+x_mum = x * xmum_convcalc
 mu_nKelvin = mu * nKelvin_conv                                              #Converts chemical potential to units of nanoKelvin
-g_units = g * nKelvin_conv * specvol_nm * 2 * np.pi
+g_units = g * nKelvin_conv * specvol_mum * 2 * np.pi                        #Converts dimensionless
 
 rhs = tf_test(mu, initial_trap(x), g)
 lhs = np.abs(init_state) ** 2
 
 #TF Approx plot
-plt.plot((x * xmum_conv), (rhs * dens_convcalc), label='Thomas Fermi')
-plt.plot((x * xmum_conv), (lhs * dens_convcalc), label='GPE')
-plt.xlim([(-35 * xmum_conv) , (-5 * xmum_conv)])
+plt.plot((x * xmum_convcalc), (rhs * dens_convcalc), label='Thomas Fermi')
+plt.plot((x * xmum_convcalc), (lhs * dens_convcalc), label='GPE')
+plt.xlim([(-35 * xmum_convcalc) , (-5 * xmum_convcalc)])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
 plt.ylabel('Density ($\mu$m^-3)')
 plt.show()
 
 #TF Approx plot normalized to 1
-plt.plot(x * xmum_conv, rhs/rhs.max(), label='Thomas Fermi normalized to 1')
-plt.plot((x * xmum_conv), lhs/lhs.max(), label='GPE normalized to 1')
-plt.xlim([-35 * xmum_conv, -5 * xmum_conv])
+plt.plot(x * xmum_convcalc, rhs / rhs.max(), label='Thomas Fermi normalized to 1')
+plt.plot((x * xmum_convcalc), lhs / lhs.max(), label='GPE normalized to 1')
+plt.xlim([-35 * xmum_convcalc, -5 * xmum_convcalc])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
 plt.ylabel('Density (dimensionless)')
@@ -309,18 +315,18 @@ rhs = tf_test(mu_flip, flipped_initial_trap(x, 0), g)
 lhs = np.abs(flipped_init_state) ** 2
 
 #TF Approx plot flipped
-plt.plot(x * xmum_conv, rhs * dens_convcalc, label='Thomas Fermi')
-plt.plot(x * xmum_conv, lhs * dens_convcalc, label='Flipped GPE')
-plt.xlim([5 * xmum_conv, 35 * xmum_conv])
+plt.plot(x * xmum_convcalc, rhs * dens_convcalc, label='Thomas Fermi')
+plt.plot(x * xmum_convcalc, lhs * dens_convcalc, label='Flipped GPE')
+plt.xlim([5 * xmum_convcalc, 35 * xmum_convcalc])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
 plt.ylabel('Density $\mu$m^-3')
 plt.show()
 
 #TF Approx plot flipped and normalized to 1
-plt.plot(x * xmum_conv, rhs/rhs.max(), label='Thomas Fermi normalized to 1')
-plt.plot(x * xmum_conv, lhs/lhs.max(), label='Flipped GPE normalized to 1')
-plt.xlim([5 * xmum_conv, 35 * xmum_conv])
+plt.plot(x * xmum_convcalc, rhs / rhs.max(), label='Thomas Fermi normalized to 1')
+plt.plot(x * xmum_convcalc, lhs / lhs.max(), label='Flipped GPE normalized to 1')
+plt.xlim([5 * xmum_convcalc, 35 * xmum_convcalc])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
 plt.ylabel('Density (dimensionless)')

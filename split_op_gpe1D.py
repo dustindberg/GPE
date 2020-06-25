@@ -97,7 +97,8 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
 
     # evaluate the potential energy
     v = v(x, 0.)
-    v -= v.min()
+    v_min = v.min()
+    v -= v_min
 
     # evaluate the kinetic energy
     k = k(p, 0.)
@@ -113,7 +114,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
     # initial guess for the wave function
     wavefunction[:] = (np.exp(-v) + 0j if init_wavefunction is None else init_wavefunction)
 
-    @njit(parallel = True)
+    @njit
     def exp_potential(psi):
         """
         Modulate the wavefunction with the nonlinear interaction potential in GPE
@@ -124,7 +125,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
         psi /= linalg.norm(psi) * np.sqrt(dx)
         psi *= np.exp(-0.5 * dt * g * np.abs(psi) ** 2)
 
-    @njit(parallel = True)
+    @njit
     def get_energy(psi, pis_p):
         """
         Calculate the energy for a given wave function and its momentum representaion
@@ -141,7 +142,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
 
         energy += np.sum(k * density)
 
-        return energy
+        return energy + v_min
 
     counter = 0
     energy = 0.
@@ -194,7 +195,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
 ########################################################################################################################
 
 
-@njit(parallel = True)
+@njit
 def relative_diff(psi_next, psi):
     """
     Efficiently calculate the relative difference of two wavefunctions. (Used in thea adaptive scheme)
@@ -354,7 +355,7 @@ class SplitOpGPE1D(object):
             pre_calculated_k = k(p, 0.)
             k = njit(lambda _, __: pre_calculated_k)
 
-        @njit(parallel = True)
+        @njit
         def expV(wavefunction, t, dt):
             """
             function to efficiently evaluate
@@ -364,7 +365,7 @@ class SplitOpGPE1D(object):
 
         self.expV = expV
 
-        @njit(parallel = True)
+        @njit
         def expK(wavefunction, t, dt):
             """
             function to efficiently evaluate
@@ -391,7 +392,7 @@ class SplitOpGPE1D(object):
 
             # Get codes for efficiently calculating the Ehrenfest relations
 
-            @njit(parallel = True)
+            @njit
             def get_p_average_rhs(density, t):
                 return np.sum(density * diff_v(x, t))
 
@@ -400,31 +401,31 @@ class SplitOpGPE1D(object):
             # The code above is equivalent to
             # self.get_p_average_rhs = njit(lambda density, t: np.sum(density * diff_v(x, t)))
 
-            @njit(parallel = True)
+            @njit
             def get_v_average(density, t):
                 return np.sum((v(x, t) + 0.5 * g * density / dx) * density)
 
             self.get_v_average = get_v_average
 
-            @njit(parallel = True)
+            @njit
             def get_x_average(density):
                 return np.sum(x * density)
 
             self.get_x_average = get_x_average
 
-            @njit(parallel = True)
+            @njit
             def get_x_average_rhs(density, t):
                 return np.sum(diff_k(p, t) * density)
 
             self.get_x_average_rhs = get_x_average_rhs
 
-            @njit(parallel = True)
+            @njit
             def get_k_average(density, t):
                 return np.sum(k(p, t) * density)
 
             self.get_k_average = get_k_average
 
-            @njit(parallel = True)
+            @njit
             def get_p_average(density):
                 return np.sum(p * density)
 

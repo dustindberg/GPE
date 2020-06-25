@@ -50,12 +50,11 @@ time_ref = m * Lx_ref ** 2 * (1. / hbar) * 1e3                  #Converts charac
 xmum_ref = Lx_ref * 1e6                                         #Converts dimensionless x coordinate into micrometers
 dens_ref = 1e-18 / (Lx_ref * Ly_ref * Lz_ref)                   #converts dimensionless wave function into units of micrometers^-3
 g_ref = 2 * N * Lx_ref * m * a_s * np.sqrt(Omeg_y * Omeg_z) / hbar #In program calculation of the dimensionless interaction parameter
-Grav_reference = m ** 2 * -G * Lx_ref ** 3 / hbar ** 2          #Reference value for dimensionless gravitational potential energy
+Grav_reference = m ** 2 * G * Lx_ref ** 3 / hbar ** 2          #Reference value for dimensionless gravitational potential energy
 v_0_ref = 0.5 * m ** 2 * Omeg_x ** 2 * Lx_ref ** 4 / hbar ** 2
 
-
-#Gravity to add to potential (calculated externally)
-Grav = -64.872303317
+#Gravitational potential factor to add to potential (calculated externally)
+Grav = 64.872303317
 
 #Hand Calculated dimensionless interaction parameter
 g = 692.956625255
@@ -81,7 +80,7 @@ def v(x, t=0.):
     Potential energy
     """
     #Option 1
-    return 0.5 * (x - Grav) ** 2 + Grav * x + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    return 0.5 * (x + Grav) ** 2 + Grav * (0.5 * Grav - x) + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 4
     #return 0.25 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
@@ -92,6 +91,26 @@ def diff_v(x, t=0.):
     """
     #Option 1
     return x + Grav + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    #Option 4
+    #return 0.5 * x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+
+@njit
+def v_flipped(x, t=0.):
+    """
+    Potential energy
+    """
+    #Option 1
+    return 0.5 * (x + Grav) ** 2 + Grav * (0.5 * Grav - x) + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x > 0)
+    #Option 4
+    #return 0.25 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+
+@njit
+def diff_v_flipped(x, t=0.):
+    """
+    the derivative of the potential energy for Ehrenfest theorem evaluation
+    """
+    #Option 1
+    return x + Grav + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x > 0)
     #Option 4
     #return 0.5 * x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
@@ -165,7 +184,8 @@ def v_muKelvin(v):
     return v * muK_calc
 
 plt.title('Potential')
-x = gpe_qsys.x  * L_xmum
+
+x = gpe_qsys.x * L_xmum
 plt.plot(x, v_muKelvin(v(x)))
 plt.xlabel('$x$ ($\mu$m) ')
 plt.ylabel('$V(x)$ ($\mu$K)')
@@ -178,7 +198,7 @@ plt.show()
 #
 ########################################################################################################################
 
-@njit(parallel = True)
+@njit
 def initial_trap(x, t=0):
     """
     Trapping potential to get the initial state
@@ -186,10 +206,25 @@ def initial_trap(x, t=0):
     :return:
     """
 
-    #omega should be 2 * Pi * 50Hz
-    #Convert to new Omega (leave offset of 20)
-    v_0 = 0.49715927316426592
-    return v_0 * (x + 20.) ** 2
+    #omega for trap is at 250 Hz
+    v_0 = 12.5              #Externally calculated value for initial state cooling factor
+#tomorrow work on offset
+    return 12.5 * (x + 20.) ** 2 + Grav * (0.5 * Grav - x)
+
+gpe_qsys = SplitOpGPE1D(
+    v=v,
+    g=g,
+    dt=propagation_dt,
+    **params
+)
+
+plt.title('Potential')
+x = gpe_qsys.x * L_xmum
+plt.plot(x, initial_trap(x) * muK_calc)
+plt.xlabel('$x$ ($\mu$m) ')
+plt.ylabel('$V(x)$ ($\mu$K)')
+plt.xlim([-80 * L_xmum, 80 * L_xmum])
+plt.show()
 
 #Increase first step, and then tighten with intermediate step
 init_state, mu = imag_time_gpe1D(
@@ -209,59 +244,13 @@ init_state, mu = imag_time_gpe1D(
 #)
 
 init_state, mu = imag_time_gpe1D(
-    wavefunction=init_state,
+    init_wavefunction=init_state,
     g=g,
     v=initial_trap,
     dt=1e-5,
     epsilon=1e-10,
     **params
 )
-
-flipped_initial_trap = njit(lambda x, t: initial_trap(-x, t))
-
-
-flipped_init_state, mu_flip = imag_time_gpe1D(
-    v=flipped_initial_trap,
-    g=g,
-    dt=5e-2,
-    epsilon=5e-7,
-    **params
-)
-
-#flipped_init_state, mu_flip = imag_time_gpe1D(
-#    v=flipped_initial_trap,
-#    g=g,
-#    dt=1e-4,
-#    epsilon=1e-9,
-#    **params
-#)
-
-flipped_init_state, mu_flip = imag_time_gpe1D(
-    wavefunction=flipped_init_state,
-    g=g,
-    v=flipped_initial_trap,
-    dt=1e-5,
-    epsilon=1e-10,
-    **params
-)
-
-# qsys = SplitOpGPE1D(
-#     v=initial_trap,
-#     g=g,
-#     dt=1e-3,
-#     **params
-# ).set_wavefunction(init_state)
-# test_init_state = qsys.propagate(0.05)
-#
-# x = qsys.x
-# plt.semilogy(x, np.abs(init_state), label='initial condition')
-# plt.semilogy(x, np.abs(test_init_state), label='propagated init condition')
-#
-# plt.semilogy(x, v(x))
-# plt.xlabel('$x$')
-# plt.ylabel('$v(x)$')
-# plt.legend()
-# plt.show()
 
 ########################################################################################################################
 #
@@ -288,22 +277,9 @@ rhs = tf_test(mu, initial_trap(x), g)
 lhs = np.abs(init_state) ** 2
 
 #TF Approx plot normalized to 1
-plt.plot(x * L_xmum, rhs / rhs.max(), label='Thomas Fermi normalized to 1')
-plt.plot((x * L_xmum), lhs / lhs.max(), label='GPE normalized to 1')
-plt.xlim([-35 * L_xmum, -5 * L_xmum])
-plt.legend(numpoints=1)
-plt.xlabel('$x$ ($\mu$m)')
-plt.ylabel('Density (dimensionless)')
-plt.show()
-
-#Flip the initial conditions
-rhs = tf_test(mu_flip, flipped_initial_trap(x, 0), g)
-lhs = np.abs(flipped_init_state) ** 2
-
-#TF Approx plot flipped and normalized to 1
-plt.plot(x * L_xmum, rhs / rhs.max(), label='Thomas Fermi normalized to 1')
-plt.plot(x * L_xmum, lhs / lhs.max(), label='Flipped GPE normalized to 1')
-plt.xlim([5 * L_xmum, 35 * L_xmum])
+plt.plot(x * L_xmum, rhs/rhs.max(), label='Thomas Fermi normalized to 1') #/ rhs.max()
+plt.plot((x * L_xmum), lhs/lhs.max(), label='GPE normalized to 1') #/ lhs.max()
+plt.xlim([-34, -19])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
 plt.ylabel('Density (dimensionless)')
@@ -445,11 +421,11 @@ gpe_wavefunctions = [
 print("\nPropagate GPE equation with flipped initial condition")
 
 flipped_gpe_qsys = SplitOpGPE1D(
-    v=v,
+    v=v_flipped,
     g=g,
     dt=propagation_dt,
     **params
-).set_wavefunction(flipped_init_state)
+).set_wavefunction(init_state)
 
 # propagate till time T and for each time step save a probability density
 flipped_gpe_wavefunctions = [
@@ -485,11 +461,11 @@ schrodinger_wavefunctions = [
 print("\nSchrodinger equation with flipped initial condition")
 
 flipped_schrodinger_qsys = SplitOpGPE1D(
-    v=v,
+    v=v_flipped,
     g=0.,
     dt=propagation_dt,
     **params
-).set_wavefunction(flipped_init_state)
+).set_wavefunction(init_state)
 
 # propagate till time T and for each time step save a probability density
 flipped_schrodinger_wavefunctions = [

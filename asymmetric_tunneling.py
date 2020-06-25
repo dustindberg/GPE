@@ -185,7 +185,7 @@ plt.show()
 #
 ########################################################################################################################
 
-@njit(parallel = True)
+@njit
 def initial_trap(x, t=0):
     """
     Trapping potential to get the initial state
@@ -244,7 +244,7 @@ flipped_init_state, mu_flip = imag_time_gpe1D(
 #)
 
 flipped_init_state, mu_flip = imag_time_gpe1D(
-    wavefunction=flipped_init_state,
+    init_wavefunction=flipped_init_state,
     g=g,
     v=flipped_initial_trap,
     dt=1e-5,

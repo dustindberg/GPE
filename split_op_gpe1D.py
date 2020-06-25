@@ -60,7 +60,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
     # parameters for FFT
     fft_params = {
         "flags": ('FFTW_MEASURE', 'FFTW_DESTROY_INPUT'),
-        "threads": 4,                                       #removed cpu_count from here
+        "threads": 8,                                       #removed cpu_count from here
         "planning_timelimit": 60,
     }
 
@@ -273,7 +273,7 @@ class SplitOpGPE1D(object):
         # parameters for FFT
         self.fft_params = {
             "flags": ('FFTW_MEASURE', 'FFTW_DESTROY_INPUT'),
-            "threads": 4,                                       #Removed cpu_count from here
+            "threads": 8,                                       #Removed cpu_count from here
             "planning_timelimit": 60,
         }
 

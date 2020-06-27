@@ -54,7 +54,7 @@ Grav_reference = m ** 2 * G * Lx_ref ** 3 / hbar ** 2          #Reference value 
 v_0_ref = 0.5 * m ** 2 * Omeg_x ** 2 * Lx_ref ** 4 / hbar ** 2
 
 #Gravitational potential factor to add to potential (calculated externally)
-Grav = 64.872303317
+Grav = -64.872303317
 
 #Hand Calculated dimensionless interaction parameter
 g = 692.956625255
@@ -62,7 +62,7 @@ g = 692.956625255
 propagation_dt = 1e-4
 
 #height of asymmetric barrier
-height_asymmetric = 35
+height_asymmetric = 100
 #for ~550 nK, try 25 for #1 and 24.24195 for #4 at delta=5
 #for ~800 nK, try 72.61931 for #1 at delta = 3.5, try 34.8903 for delta = 5
 #for ~1microK, try 91.1142 for #1 at delta = 3.5, try 43.9528 for delta = 5
@@ -80,7 +80,7 @@ def v(x, t=0.):
     Potential energy
     """
     #Option 1
-    return 0.5 * (x + Grav) ** 2 + Grav * (0.5 * Grav - x) + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    return 0.5 * (Grav - x) ** 2 + Grav * (x - 0.5 * Grav) + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 4
     #return 0.25 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
@@ -90,7 +90,7 @@ def diff_v(x, t=0.):
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
     #Option 1
-    return x + Grav + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    return -1. * x + Grav + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 4
     #return 0.5 * x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
@@ -100,7 +100,7 @@ def v_flipped(x, t=0.):
     Potential energy
     """
     #Option 1
-    return 0.5 * (x + Grav) ** 2 + Grav * (0.5 * Grav - x) + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x > 0)
+    return 0.5 * (Grav - x) ** 2 + Grav * (x - 0.5 * Grav) + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x > 0)
     #Option 4
     #return 0.25 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
@@ -110,7 +110,7 @@ def diff_v_flipped(x, t=0.):
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
     #Option 1
-    return x + Grav + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x > 0)
+    return -1. * x + Grav + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x > 0)
     #Option 4
     #return 0.5 * x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
@@ -190,6 +190,9 @@ plt.plot(x, v_muKelvin(v(x)))
 plt.xlabel('$x$ ($\mu$m) ')
 plt.ylabel('$V(x)$ ($\mu$K)')
 plt.xlim([-80 * L_xmum, 80 * L_xmum])
+
+plt.savefig('Potential' + '.pdf')
+
 plt.show()
 
 ########################################################################################################################
@@ -218,12 +221,15 @@ gpe_qsys = SplitOpGPE1D(
     **params
 )
 
-plt.title('Potential')
+plt.title('Trapping Potential')
 x = gpe_qsys.x * L_xmum
 plt.plot(x, initial_trap(x) * muK_calc)
 plt.xlabel('$x$ ($\mu$m) ')
 plt.ylabel('$V(x)$ ($\mu$K)')
 plt.xlim([-80 * L_xmum, 80 * L_xmum])
+
+plt.savefig('Trapping Potential' + '.pdf')
+
 plt.show()
 
 #Increase first step, and then tighten with intermediate step
@@ -279,10 +285,13 @@ lhs = np.abs(init_state) ** 2
 #TF Approx plot normalized to 1
 plt.plot(x * L_xmum, rhs/rhs.max(), label='Thomas Fermi normalized to 1') #/ rhs.max()
 plt.plot((x * L_xmum), lhs/lhs.max(), label='GPE normalized to 1') #/ lhs.max()
-plt.xlim([-34, -19])
+plt.xlim([-45, -20])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
 plt.ylabel('Density (dimensionless)')
+
+plt.savefig('Thomas-Fermi Approximation' + '.pdf')
+
 plt.show()
 
 
@@ -302,7 +311,7 @@ def analyze_propagation(qsys, wavefunctions, title):
     :return: None
     """
     plt.title(title)
-
+    plot_title = title
     # plot the time dependent density
     extent = [qsys.x.min(), qsys.x.max(), 0., T]
 
@@ -324,7 +333,7 @@ def analyze_propagation(qsys, wavefunctions, title):
     times = qsys.times
     t_ms = np.asarray(times) * time_ref
     plt.subplot(131)
-    plt.title("Verify the first Ehrenfest theorem", pad = 10)
+    plt.title("Verify the first Ehrenfest theorem", pad = 15)
     #plt.title("Verify the first Ehrenfest theorem", pad= Try out values tomorrow)
 
     plt.plot(
@@ -346,7 +355,7 @@ def analyze_propagation(qsys, wavefunctions, title):
     plt.xlabel('time $t$ (ms)')
 
     plt.subplot(132)
-    plt.title("Verify the second Ehrenfest theorem", pad = 10)
+    plt.title("Verify the second Ehrenfest theorem", pad = 15)
 
     plt.plot(
         t_ms,
@@ -362,7 +371,7 @@ def analyze_propagation(qsys, wavefunctions, title):
     plt.xlabel('time $t$ (ms)')
 
     plt.subplot(133)
-    plt.title("The expectation value of the hamiltonian", pad = 10)
+    plt.title("The expectation value of the hamiltonian", pad = 15)
 
     # Analyze how well the energy was preserved
     h = np.array(qsys.hamiltonian_average)
@@ -373,10 +382,12 @@ def analyze_propagation(qsys, wavefunctions, title):
     )
     print("Initial energy {:.4e}".format(h[0]))
 
-    #plt.plot(t_ms, h * muKelvin_conv)
+
     plt.plot(t_ms, h * muK_calc)
     plt.ylabel('energy ($\mu$K)')
     plt.xlabel('time $t$ (ms)')
+
+    plt.savefig('EFT: ' + plot_title + '.pdf')
 
     plt.show()
 
@@ -505,18 +516,20 @@ analyze_propagation(
 ########################################################################################################################
 
 dx = gpe_qsys.dx
-x_cut = int(0.6 * gpe_qsys.wavefunction.size)               #These are cuts such that we observe the behavior about the initial location of the wave
-x_cut_flipped = int(0.4 * gpe_qsys.wavefunction.size)
+#x_cut = int(0.6 * gpe_qsys.wavefunction.size)               #These are cuts such that we observe the behavior about the initial location of the wave
+#x_cut_flipped = int(0.4 * gpe_qsys.wavefunction.size)
 
 plt.subplot(121)
 plt.plot(
     t_msplot,
-    np.sum(np.abs(schrodinger_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
+    np.sum(np.abs(schrodinger_wavefunctions) ** 2, axis=1) * dx,
+    #np.sum(np.abs(schrodinger_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
     label='Schrodinger'
 )
 plt.plot(
     t_msplot,
-    np.sum(np.abs(flipped_schrodinger_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1) * dx,
+    np.sum(np.abs(flipped_schrodinger_wavefunctions) ** 2, axis=1) * dx,
+    #np.sum(np.abs(flipped_schrodinger_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1) * dx,
     label='Flipped Schrodinger'
 )
 plt.legend()
@@ -526,17 +539,21 @@ plt.ylabel("transmission probability")
 plt.subplot(122)
 plt.plot(
     t_msplot,
-    np.sum(np.abs(gpe_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
+    np.sum(np.abs(gpe_wavefunctions) ** 2, axis=1) * dx,
+    #np.sum(np.abs(gpe_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
     label='GPE'
 )
 plt.plot(
     t_msplot,
-    np.sum(np.abs(flipped_gpe_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1) * dx,
+    np.sum(np.abs(flipped_gpe_wavefunctions) ** 2, axis=1) * dx,
+    #np.sum(np.abs(flipped_gpe_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1) * dx,
     label='Flipped GPE'
 )
 plt.legend()
 plt.xlabel('time $t$ (ms)')
 plt.ylabel("transmission probability")
+
+plt.savefig('Transmission Probability' + '.pdf')
 
 plt.show()
 

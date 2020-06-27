@@ -6,7 +6,7 @@ from numba.core.registry import CPUDispatcher
 from types import FunctionType
 
 
-def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, epsilon=1e-7, abs_boundary=1., **kwargs):
+def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=None, epsilon=1e-7, abs_boundary=1., **kwargs):
     """
     Imaginary time propagator to get the ground state
 
@@ -55,7 +55,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, wavefunction=None, 
     img_exp_k = np.exp(-dt * k)
 
     # initial guess for the wave function
-    wavefunction = (np.exp(-v) + 0j if wavefunction is None else wavefunction)
+    wavefunction[:] = (np.exp(-v) + 0j if init_wavefunction is None else init_wavefunction)
 
     @njit
     def exp_potential(psi):

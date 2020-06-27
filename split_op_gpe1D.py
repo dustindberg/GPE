@@ -60,7 +60,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
     # parameters for FFT
     fft_params = {
         "flags": ('FFTW_MEASURE', 'FFTW_DESTROY_INPUT'),
-        "threads": 8,                                       #removed cpu_count from here
+        "threads": cpu_count(),                                       #removed cpu_count from here
         "planning_timelimit": 60,
     }
 
@@ -102,7 +102,8 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
 
     # evaluate the kinetic energy
     k = k(p, 0.)
-    k -= k.min()
+    k_min = k.min()
+    k -= k_min
 
     # pre-calculate the absorbing potential and the sequence of alternating signs
     abs_boundary = (abs_boundary if isinstance(abs_boundary, (float, int)) else abs_boundary(x))
@@ -273,7 +274,7 @@ class SplitOpGPE1D(object):
         # parameters for FFT
         self.fft_params = {
             "flags": ('FFTW_MEASURE', 'FFTW_DESTROY_INPUT'),
-            "threads": 8,                                       #Removed cpu_count from here
+            "threads": cpu_count(),                                       #Removed cpu_count from here
             "planning_timelimit": 60,
         }
 

@@ -25,12 +25,12 @@ Omeg_x = 50 * 2 * np.pi                                     #Harmonic oscillatio
 Omeg_y = 500 * 2 * np.pi                                    #Harmonic oscillation in the y-axis in Hz
 Omeg_z = 500 * 2 * np.pi                                    #Harmonic oscillation in the z-axis in Hz
 a_s = 5.291772109e-9                                        #Scattering length also in meters, from 100 * 5.291772109e-11
-L_x = 1.52295528474e-6                                      #Externally calcilated characteristic length in the x-direction in micrometers
-L_y = 4.81600747437e-7                                      #Externally calcilated characteristic length in the y-direction in micrometers
-L_z = 4.81600747437e-7                                      #Externally calcilated characteristic length in the z-direction in micrometers
-L_xmum = np.sqrt(1.0515718 / (14.431609 * Omeg_x)) * 100    #Externally calcilated characteristic length in the x-direction in micrometers
-L_ymum = np.sqrt(1.0515718 / (14.431609 * Omeg_y)) * 100    #Externally calcilated characteristic length in the y-direction in micrometers
-L_zmum = np.sqrt(1.0515718 / (14.431609 * Omeg_z)) * 100    #Externally calcilated characteristic length in the z-direction in micrometers
+L_x = 1.52295528474e-6                                      #Externally calculated characteristic length in the x-direction in micrometers
+L_y = 4.81600747437e-7                                      #Externally calculated characteristic length in the y-direction in micrometers
+L_z = 4.81600747437e-7                                      #Externally calculated characteristic length in the z-direction in micrometers
+L_xmum = np.sqrt(1.0515718 / (14.431609 * Omeg_x)) * 100    #Externally calculated characteristic length in the x-direction in micrometers
+L_ymum = np.sqrt(1.0515718 / (14.431609 * Omeg_y)) * 100    #Externally calculated characteristic length in the y-direction in micrometers
+L_zmum = np.sqrt(1.0515718 / (14.431609 * Omeg_z)) * 100    #Externally calculated characteristic length in the z-direction in micrometers
 muK_calc = 0.00239962237                                    #Calculated convertion to microKelvin
 nK_calc = 2.39962237                                        #Calculated conversion to nanoKelvin
 specvol_mum = (L_xmum * L_ymum * L_zmum) / N                #Converts unit-less spacial terms into specific volume: micrometers^3 per particle
@@ -62,13 +62,13 @@ g = 692.956625255
 propagation_dt = 1e-4
 
 #height of asymmetric barrier
-height_asymmetric = 100
+height_asymmetric = 92
 #for ~550 nK, try 25 for #1 and 24.24195 for #4 at delta=5
 #for ~800 nK, try 72.61931 for #1 at delta = 3.5, try 34.8903 for delta = 5
 #for ~1microK, try 91.1142 for #1 at delta = 3.5, try 43.9528 for delta = 5
 
 #This corresponds to sharpness parameter
-delta = 5
+delta = 3.5
 
 
 #Increases the number of peaks for Option 2 or second peak width for Option 3
@@ -90,7 +90,7 @@ def diff_v(x, t=0.):
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
     #Option 1
-    return -1. * x + Grav + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    return Grav - x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 4
     #return 0.5 * x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
@@ -110,7 +110,7 @@ def diff_v_flipped(x, t=0.):
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
     #Option 1
-    return -1. * x + Grav + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x > 0)
+    return Grav - x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x > 0)
     #Option 4
     #return 0.5 * x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
@@ -153,7 +153,7 @@ params = dict(
 
     k=k,
 
-    diff_v=diff_v,
+    #diff_v=diff_v,
     diff_k=diff_k,
 
     # epsilon=1e-2,
@@ -210,9 +210,8 @@ def initial_trap(x, t=0):
     """
 
     #omega for trap is at 250 Hz
-    v_0 = 12.5              #Externally calculated value for initial state cooling factor
-#tomorrow work on offset
-    return 12.5 * (x + 20.) ** 2 + Grav * (0.5 * Grav - x)
+    v_0 = 12.5              #Externally calculated value for initial state cooling factor at 250Hz
+    return v_0 * (x + 20.) ** 2 + Grav * (0.5 * Grav - x)
 
 gpe_qsys = SplitOpGPE1D(
     v=v,
@@ -387,7 +386,7 @@ def analyze_propagation(qsys, wavefunctions, title):
     plt.ylabel('energy ($\mu$K)')
     plt.xlabel('time $t$ (ms)')
 
-    plt.savefig('EFT: ' + plot_title + '.pdf')
+    plt.savefig('EFT_' + plot_title + '.pdf')
 
     plt.show()
 
@@ -410,6 +409,7 @@ gpe_qsys = SplitOpGPE1D(
     v=v,
     g=g,
     dt=propagation_dt,
+    diff_v=diff_v,
     **params
 )
 gpe_qsys.set_wavefunction(init_state)
@@ -435,6 +435,7 @@ flipped_gpe_qsys = SplitOpGPE1D(
     v=v_flipped,
     g=g,
     dt=propagation_dt,
+    diff_v=diff_v_flipped,
     **params
 ).set_wavefunction(init_state)
 
@@ -455,6 +456,7 @@ schrodinger_qsys = SplitOpGPE1D(
     v=v,
     g=0.,
     dt=propagation_dt,
+    diff_v=diff_v,
     **params
 ).set_wavefunction(init_state)
 
@@ -475,6 +477,7 @@ flipped_schrodinger_qsys = SplitOpGPE1D(
     v=v_flipped,
     g=0.,
     dt=propagation_dt,
+    diff_v=diff_v_flipped,
     **params
 ).set_wavefunction(init_state)
 
@@ -516,7 +519,7 @@ analyze_propagation(
 ########################################################################################################################
 
 dx = gpe_qsys.dx
-#x_cut = int(0.6 * gpe_qsys.wavefunction.size)               #These are cuts such that we observe the behavior about the initial location of the wave
+x_cut = int(0.6 * gpe_qsys.wavefunction.size)               #These are cuts such that we observe the behavior about the initial location of the wave
 #x_cut_flipped = int(0.4 * gpe_qsys.wavefunction.size)
 
 plt.subplot(121)
@@ -530,6 +533,7 @@ plt.plot(
     t_msplot,
     np.sum(np.abs(flipped_schrodinger_wavefunctions) ** 2, axis=1) * dx,
     #np.sum(np.abs(flipped_schrodinger_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1) * dx,
+    #np.sum(np.abs(flipped_schrodinger_wavefunctions)[:, :x_cut] ** 2, axis=1) * dx,
     label='Flipped Schrodinger'
 )
 plt.legend()
@@ -547,6 +551,7 @@ plt.plot(
     t_msplot,
     np.sum(np.abs(flipped_gpe_wavefunctions) ** 2, axis=1) * dx,
     #np.sum(np.abs(flipped_gpe_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1) * dx,
+    #np.sum(np.abs(flipped_gpe_wavefunctions)[:, :x_cut] ** 2, axis=1) * dx,
     label='Flipped GPE'
 )
 plt.legend()

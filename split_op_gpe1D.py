@@ -397,10 +397,10 @@ class SplitOpGPE1D(object):
             def get_p_average_rhs(density, t):
                 return np.sum(density * diff_v(x, t))
 
-            self.get_p_average_rhs = get_p_average_rhs
+            #self.get_p_average_rhs = get_p_average_rhs
 
             # The code above is equivalent to
-            # self.get_p_average_rhs = njit(lambda density, t: np.sum(density * diff_v(x, t)))
+            self.get_p_average_rhs = njit(lambda density, t: np.sum(density * diff_v(x, t)))
 
             @njit
             def get_v_average(density, t):

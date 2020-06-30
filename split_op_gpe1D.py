@@ -7,6 +7,16 @@ from numba.core.registry import CPUDispatcher
 from types import FunctionType
 from multiprocessing import cpu_count
 
+import os
+
+threads = 64
+os.environ["OMP_NUM_THREADS"] = '{}'.format(threads)
+
+os.environ['NUMEXPR_MAX_THREADS']='{}'.format(threads)
+os.environ['NUMEXPR_NUM_THREADS']='{}'.format(threads)
+os.environ['OMP_NUM_THREADS'] = '{}'.format(threads)
+os.environ['MKL_NUM_THREADS'] = '{}'.format(threads)
+
 #Potentially try reducing cpu count
 
 def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=None, epsilon=1e-7,
@@ -397,10 +407,10 @@ class SplitOpGPE1D(object):
             def get_p_average_rhs(density, t):
                 return np.sum(density * diff_v(x, t))
 
-            #self.get_p_average_rhs = get_p_average_rhs
+            self.get_p_average_rhs = get_p_average_rhs
 
             # The code above is equivalent to
-            self.get_p_average_rhs = njit(lambda density, t: np.sum(density * diff_v(x, t)))
+            #self.get_p_average_rhs = njit(lambda density, t: np.sum(density * diff_v(x, t)))
 
             @njit
             def get_v_average(density, t):

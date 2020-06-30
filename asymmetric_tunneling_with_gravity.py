@@ -19,7 +19,7 @@ import pytz
 Start_time = datetime.datetime.now(pytz.timezone('US/Central'))
 
 #Calculated Physical Values and conversion factors
-N = 1e4                                                     #number of particles
+N = 10000                                                   #number of particles
 m = 1.4431609e-25                                           #Calculated mass of 87Rb in kg
 Omeg_x = 50 * 2 * np.pi                                     #Harmonic oscillation in the x-axis in Hz
 Omeg_y = 500 * 2 * np.pi                                    #Harmonic oscillation in the y-axis in Hz
@@ -49,20 +49,20 @@ specvol_ref = (Lx_ref * Ly_ref * Lz_ref) / N                    #Converts unit-l
 time_ref = m * Lx_ref ** 2 * (1. / hbar) * 1e3                  #Converts characteristic time into milliseconds
 xmum_ref = Lx_ref * 1e6                                         #Converts dimensionless x coordinate into micrometers
 dens_ref = 1e-18 / (Lx_ref * Ly_ref * Lz_ref)                   #converts dimensionless wave function into units of micrometers^-3
-g_ref = 2 * N * Lx_ref * m * a_s * np.sqrt(Omeg_y * Omeg_z) / hbar #In program calculation of the dimensionless interaction parameter
-Grav_reference = m ** 2 * G * Lx_ref ** 3 / hbar ** 2          #Reference value for dimensionless gravitational potential energy
+g = 2 * N * Lx_ref * m * a_s * np.sqrt(Omeg_y * Omeg_z) / hbar  #In program calculation of the dimensionless interaction parameter
+Grav_reference = m ** 2 * G * Lx_ref ** 3 / hbar ** 2           #Reference value for dimensionless gravitational potential energy
 v_0_ref = 0.5 * m ** 2 * Omeg_x ** 2 * Lx_ref ** 4 / hbar ** 2
 
 #Gravitational potential factor to add to potential (calculated externally)
 Grav = -64.872303317
 
 #Hand Calculated dimensionless interaction parameter
-g = 692.956625255
+#g = 692.956625255
 
 propagation_dt = 1e-4
 
 #height of asymmetric barrier
-height_asymmetric = 92
+height_asymmetric = 72.7
 #for ~550 nK, try 25 for #1 and 24.24195 for #4 at delta=5
 #for ~800 nK, try 72.61931 for #1 at delta = 3.5, try 34.8903 for delta = 5
 #for ~1microK, try 91.1142 for #1 at delta = 3.5, try 43.9528 for delta = 5
@@ -90,7 +90,7 @@ def diff_v(x, t=0.):
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
     #Option 1
-    return Grav - x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #Option 4
     #return 0.5 * x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
@@ -110,7 +110,7 @@ def diff_v_flipped(x, t=0.):
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
     #Option 1
-    return Grav - x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x > 0)
+    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x > 0)
     #Option 4
     #return 0.5 * x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
@@ -193,6 +193,15 @@ plt.xlim([-80 * L_xmum, 80 * L_xmum])
 
 plt.savefig('Potential' + '.pdf')
 
+plt.show()
+
+#Plot the flipped potential
+plt.title(' Flipped Potential')
+plt.plot(x, v_muKelvin(v_flipped(x)))
+plt.xlabel('$x$ ($\mu$m) ')
+plt.ylabel('$V(x)$ ($\mu$K)')
+plt.xlim([-80 * L_xmum, 80 * L_xmum])
+plt.savefig('Potential Flipped' + '.pdf')
 plt.show()
 
 ########################################################################################################################
@@ -299,7 +308,6 @@ plt.show()
 # Generate plots to test the propagation
 #
 ########################################################################################################################
-
 
 def analyze_propagation(qsys, wavefunctions, title):
     """
@@ -486,6 +494,8 @@ flipped_schrodinger_wavefunctions = [
      flipped_schrodinger_qsys.propagate(t).copy() for t in times
 ]
 
+Mid_time = datetime.datetime.now(pytz.timezone('US/Central'))
+
 ########################################################################################################################
 #
 # Analyze the simulations
@@ -512,6 +522,8 @@ analyze_propagation(
     "Flipped GPE evolution"
 )
 
+
+
 ########################################################################################################################
 #
 # Calculate the transmission probability
@@ -525,15 +537,15 @@ x_cut = int(0.6 * gpe_qsys.wavefunction.size)               #These are cuts such
 plt.subplot(121)
 plt.plot(
     t_msplot,
-    np.sum(np.abs(schrodinger_wavefunctions) ** 2, axis=1) * dx,
-    #np.sum(np.abs(schrodinger_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
+    #np.sum(np.abs(schrodinger_wavefunctions) ** 2, axis=1) * dx,
+    np.sum(np.abs(schrodinger_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
     label='Schrodinger'
 )
 plt.plot(
     t_msplot,
-    np.sum(np.abs(flipped_schrodinger_wavefunctions) ** 2, axis=1) * dx,
+    #np.sum(np.abs(flipped_schrodinger_wavefunctions) ** 2, axis=1) * dx,
     #np.sum(np.abs(flipped_schrodinger_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1) * dx,
-    #np.sum(np.abs(flipped_schrodinger_wavefunctions)[:, :x_cut] ** 2, axis=1) * dx,
+    np.sum(np.abs(flipped_schrodinger_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
     label='Flipped Schrodinger'
 )
 plt.legend()
@@ -543,15 +555,15 @@ plt.ylabel("transmission probability")
 plt.subplot(122)
 plt.plot(
     t_msplot,
-    np.sum(np.abs(gpe_wavefunctions) ** 2, axis=1) * dx,
-    #np.sum(np.abs(gpe_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
+    #np.sum(np.abs(gpe_wavefunctions) ** 2, axis=1) * dx,
+    np.sum(np.abs(gpe_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
     label='GPE'
 )
 plt.plot(
     t_msplot,
-    np.sum(np.abs(flipped_gpe_wavefunctions) ** 2, axis=1) * dx,
+    #np.sum(np.abs(flipped_gpe_wavefunctions) ** 2, axis=1) * dx,
     #np.sum(np.abs(flipped_gpe_wavefunctions)[:, :x_cut_flipped] ** 2, axis=1) * dx,
-    #np.sum(np.abs(flipped_gpe_wavefunctions)[:, :x_cut] ** 2, axis=1) * dx,
+    np.sum(np.abs(flipped_gpe_wavefunctions)[:, x_cut:] ** 2, axis=1) * dx,
     label='Flipped GPE'
 )
 plt.legend()
@@ -565,5 +577,6 @@ plt.show()
 End_time = datetime.datetime.now(pytz.timezone('US/Central'))
 
 print ("Start time: {}:{}:{}".format(Start_time.hour,Start_time.minute,Start_time.second))
+print ("Mid-point time: {}:{}:{}".format(Mid_time.hour,Mid_time.minute,Mid_time.second))
 print ("End time: {}:{}:{}".format(End_time.hour, End_time.minute, End_time.second))
 

@@ -193,9 +193,9 @@ def initial_trap(x, t=0):
     :return:
     """
     # omega = 2 * Pi * 100Hz
-    #omega should be 2 * Pi * 50Hz
+    #omega should be 2 * Pi * 250Hz
     #Convert to new Omega (leave offset of 20)
-    v_0 = 0.5 * m ** 2 * Omeg_x ** 2 * Lx_ref ** 4 * (1. / hbar ** 2)
+    v_0 = 12.5
     return v_0 * (x + 20.) ** 2
 
 #Increase first step, and then tighten with intermediate step

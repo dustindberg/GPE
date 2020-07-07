@@ -51,12 +51,6 @@ dens_ref = 1e-18 / (Lx_ref * Ly_ref * Lz_ref)                   #converts dimens
 g_ref = 2 * N * Lx_ref * m * a_s * np.sqrt(Omeg_y * Omeg_z) / hbar #In program calculation of the dimensionless interaction parameter
 
 
-Grav_reference = m ** 2 * -G * Lx_ref ** 3 / hbar ** 2          #Reference value for dimensionless gravitational potential energy
-#Gravity to add to potential (calculated externally)
-Grav = -64.872303317
-#return 0.5 * (x - Grav) ** 2 + Grav * x + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0) potential
-#return x + Grav + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0) derivative
-
 #Hand Calculated dimensionless interaction parameter
 g = 692.956625255
 

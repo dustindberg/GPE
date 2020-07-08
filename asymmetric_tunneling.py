@@ -40,12 +40,13 @@ Lx_ref = np.sqrt(hbar / (m * Omeg_x))                           #Characteristic 
 Ly_ref = np.sqrt(hbar / (m * Omeg_y))                           #Characteristic length in the y-direction in meters
 Lz_ref = np.sqrt(hbar / (m * Omeg_z))                           #Characteristic length in the z-direction in meters
 energy_conv  = hbar ** 2 / (m * Lx_ref ** 2)                    #Converts unit-less energy terms to joules
+energy_conv_alt  = hbar * Omeg_x
 muK_ref = energy_conv * (1e6 / Boltzmann)                       #Converts Joules energy terms to microKelvin
 alt_muKevlin_conv = hbar * Omeg_x * 1e6 / Boltzmann             #An alternate conversion from dimensionless energy terms to microKelvin
 nK_ref = energy_conv * (1e9 / Boltzmann)                        #Converts Joules energy terms to nanoKelvin
 alt_nK_ref = hbar * Omeg_x * 1e9 / Boltzmann                    #An alternate conversion from dimensionless energy terms to nanoKelvin
 specvol_ref = (Lx_ref * Ly_ref * Lz_ref) / N                    #Converts unit-less spacial terms into specific volume: m^3 per particle
-time_ref = m * Lx_ref ** 2 * (1. / hbar) * 1e3                  #Converts characteristic time into milliseconds
+time_ref = 1. / Omeg_x *1e3                                     #Converts characteristic time into milliseconds
 xmum_ref = Lx_ref * 1e6                                         #Converts dimensionless x coordinate into micrometers
 dens_ref = 1e-18 / (Lx_ref * Ly_ref * Lz_ref)                   #converts dimensionless wave function into units of micrometers^-3
 g_ref = 2 * N * Lx_ref * m * a_s * np.sqrt(Omeg_y * Omeg_z) / hbar #In program calculation of the dimensionless interaction parameter
@@ -160,7 +161,7 @@ gpe_qsys = SplitOpGPE1D(
 @njit
 def v_muKelvin(v):
     """"
-    The potential energy with corrected units milliKelvin
+    The potential energy with corrected units microKelvin
     """
     #return v * muKelvin_conv
     return v * muK_calc
@@ -171,6 +172,7 @@ plt.plot(x, v_muKelvin(v(x)))
 plt.xlabel('$x$ ($\mu$m) ')
 plt.ylabel('$V(x)$ ($\mu$K)')
 plt.xlim([-80 * L_xmum, 80 * L_xmum])
+plt.savefig('Potential' + '.pdf')
 plt.show()
 
 ########################################################################################################################
@@ -178,6 +180,10 @@ plt.show()
 # Get the initial state
 #
 ########################################################################################################################
+
+#parameters for trapping potential
+v_0 = 12.5
+offset = 20.
 
 @njit
 def initial_trap(x, t=0):
@@ -189,8 +195,7 @@ def initial_trap(x, t=0):
     # omega = 2 * Pi * 100Hz
     #omega should be 2 * Pi * 250Hz
     #Convert to new Omega (leave offset of 20)
-    v_0 = 12.5
-    return v_0 * (x + 20.) ** 2
+    return v_0 * (x + offset) ** 2
 
 #Increase first step, and then tighten with intermediate step
 init_state, mu = imag_time_gpe1D(
@@ -201,16 +206,8 @@ init_state, mu = imag_time_gpe1D(
     **params
 )
 
-#init_state, mu = imag_time_gpe1D(
-#    v=initial_trap,
-#    g=g,
-#    dt=5e-4,
-#    epsilon=5e-9,
-#    **params
-#)
-
 init_state, mu = imag_time_gpe1D(
-    wavefunction=init_state,
+    init_wavefunction=init_state,
     g=g,
     v=initial_trap,
     dt=1e-5,
@@ -218,24 +215,16 @@ init_state, mu = imag_time_gpe1D(
     **params
 )
 
-flipped_initial_trap = njit(lambda x, t: initial_trap(-x, t))
 
+flipped_initial_trap = njit(lambda x, t: initial_trap(-x, t))
 
 flipped_init_state, mu_flip = imag_time_gpe1D(
     v=flipped_initial_trap,
     g=g,
-    dt=5e-2,
-    epsilon=5e-7,
+    dt=1e-3,
+    epsilon=1e-8,
     **params
 )
-
-#flipped_init_state, mu_flip = imag_time_gpe1D(
-#    v=flipped_initial_trap,
-#    g=g,
-#    dt=1e-4,
-#    epsilon=1e-9,
-#    **params
-#)
 
 flipped_init_state, mu_flip = imag_time_gpe1D(
     init_wavefunction=flipped_init_state,
@@ -266,7 +255,7 @@ flipped_init_state, mu_flip = imag_time_gpe1D(
 
 ########################################################################################################################
 #
-#Adding tests for the Thomas Fermi approximation
+# Adding tests for the Thomas Fermi approximation
 #
 ########################################################################################################################
 
@@ -282,28 +271,21 @@ def tf_test(mu, v, g):
 dx = 2. * params['x_amplitude'] / params['x_grid_dim']
 x = (np.arange(params['x_grid_dim']) - params['x_grid_dim'] / 2) * dx
 x_mum = x * L_xmum
+chem_potential = (2 * v_0) ** (1/3) * (3 * g / 8) ** (2/3)
 mu_nKelvin = mu * nK_ref                                              #Converts chemical potential to units of nanoKelvin
 g_units = g * nK_ref * specvol_mum * 2 * np.pi                        #Converts dimensionless
 
-rhs = tf_test(mu, initial_trap(x), g)
+rhs = tf_test(chem_potential, initial_trap(x), g)
 lhs = np.abs(init_state) ** 2
 
 #TF Approx plot
-plt.plot((x * L_xmum), (rhs * dens_convcalc), label='Thomas Fermi')
-plt.plot((x * L_xmum), (lhs * dens_convcalc), label='GPE')
-plt.xlim([(-35 * L_xmum) , (-5 * L_xmum)])
-plt.legend(numpoints=1)
-plt.xlabel('$x$ ($\mu$m)')
-plt.ylabel('Density ($\mu$m^-3)')
-plt.show()
-
-#TF Approx plot normalized to 1
-plt.plot(x * L_xmum, rhs / rhs.max(), label='Thomas Fermi normalized to 1')
-plt.plot((x * L_xmum), lhs / lhs.max(), label='GPE normalized to 1')
-plt.xlim([-35 * L_xmum, -5 * L_xmum])
+plt.plot(x * L_xmum, rhs, label='Thomas Fermi')
+plt.plot((x * L_xmum), lhs, label='GPE')
+#plt.xlim([-45, -20])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
 plt.ylabel('Density (dimensionless)')
+plt.savefig('Thomas-Fermi Approximation' + '.pdf')
 plt.show()
 
 #Flip the initial conditions
@@ -311,23 +293,14 @@ rhs = tf_test(mu_flip, flipped_initial_trap(x, 0), g)
 lhs = np.abs(flipped_init_state) ** 2
 
 #TF Approx plot flipped
-plt.plot(x * L_xmum, rhs * dens_convcalc, label='Thomas Fermi')
-plt.plot(x * L_xmum, lhs * dens_convcalc, label='Flipped GPE')
-plt.xlim([5 * L_xmum, 35 * L_xmum])
-plt.legend(numpoints=1)
-plt.xlabel('$x$ ($\mu$m)')
-plt.ylabel('Density $\mu$m^-3')
-plt.show()
-
-#TF Approx plot flipped and normalized to 1
-plt.plot(x * L_xmum, rhs / rhs.max(), label='Thomas Fermi normalized to 1')
-plt.plot(x * L_xmum, lhs / lhs.max(), label='Flipped GPE normalized to 1')
-plt.xlim([5 * L_xmum, 35 * L_xmum])
+plt.plot(x * L_xmum, rhs, label='Thomas Fermi Flipped')
+plt.plot((x * L_xmum), lhs, label='GPE flipped')
+plt.xlim([20, 45])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
 plt.ylabel('Density (dimensionless)')
+plt.savefig('Thomas-Fermi Approximation Flipped' + '.pdf')
 plt.show()
-
 
 ########################################################################################################################
 #
@@ -345,7 +318,7 @@ def analyze_propagation(qsys, wavefunctions, title):
     :return: None
     """
     plt.title(title)
-
+    plot_title = title
     # plot the time dependent density
     extent = [qsys.x.min(), qsys.x.max(), 0., T]
 
@@ -416,11 +389,10 @@ def analyze_propagation(qsys, wavefunctions, title):
     )
     print("Initial energy {:.4e}".format(h[0]))
 
-    #plt.plot(t_ms, h * muKelvin_conv)
     plt.plot(t_ms, h * muK_calc)
     plt.ylabel('energy ($\mu$K)')
     plt.xlabel('time $t$ (ms)')
-
+    plt.savefig('EFT_' + plot_title + '.pdf')
     plt.show()
 
     plt.title('time increments $dt$')
@@ -515,6 +487,8 @@ flipped_schrodinger_wavefunctions = [
      flipped_schrodinger_qsys.propagate(t).copy() for t in times
 ]
 
+Mid_time = datetime.datetime.now(pytz.timezone('US/Central'))
+
 ########################################################################################################################
 #
 # Analyze the simulations
@@ -551,6 +525,30 @@ dx = gpe_qsys.dx
 x_cut = int(0.6 * gpe_qsys.wavefunction.size)               #These are cuts such that we observe the behavior about the initial location of the wave
 x_cut_flipped = int(0.4 * gpe_qsys.wavefunction.size)
 
+#potential = v_muKelvin(v(x))
+#plt.title('Potential')
+#plt.plot(x, potential)
+#plt.fill_between(
+#    x[x_cut:],
+#   potential[x_cut:],
+#    potential.min(),
+#    facecolor="orange",
+#         color='orange',
+#      alpha=0.2
+#)
+#plt.fill_between(
+#    x[:x_cut_flipped],
+#    potential[:x_cut_flipped],
+#    potential.min(),
+#    facecolor="green",
+#         color='green',
+#      alpha=0.2
+#)
+#plt.xlabel('$x$ ($\mu$m) ')
+#plt.ylabel('$V(x)$ ($\mu$K)')
+#plt.xlim([-80 * L_xmum, 80 * L_xmum])
+#plt.show()
+
 plt.subplot(121)
 plt.plot(
     t_msplot,
@@ -580,11 +578,11 @@ plt.plot(
 plt.legend()
 plt.xlabel('time $t$ (ms)')
 plt.ylabel("transmission probability")
-
+plt.savefig('Transmission Probability' + '.pdf')
 plt.show()
 
 End_time = datetime.datetime.now(pytz.timezone('US/Central'))
 
 print ("Start time: {}:{}:{}".format(Start_time.hour,Start_time.minute,Start_time.second))
+print ("Mid-point time: {}:{}:{}".format(Mid_time.hour,Mid_time.minute,Mid_time.second))
 print ("End time: {}:{}:{}".format(End_time.hour, End_time.minute, End_time.second))
-

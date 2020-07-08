@@ -11,7 +11,6 @@ import os
 
 threads = 64
 os.environ["OMP_NUM_THREADS"] = '{}'.format(threads)
-
 os.environ['NUMEXPR_MAX_THREADS']='{}'.format(threads)
 os.environ['NUMEXPR_NUM_THREADS']='{}'.format(threads)
 os.environ['OMP_NUM_THREADS'] = '{}'.format(threads)

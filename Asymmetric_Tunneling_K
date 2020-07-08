@@ -1,0 +1,175 @@
+from numba import njit
+import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize, SymLogNorm
+import numpy as np
+from scipy.constants import hbar, proton_mass, Boltzmann
+from scipy.constants import g as G
+from scipy.interpolate import UnivariateSpline
+from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D # class for the split operator propagation
+import datetime
+import pytz
+
+Start_time = datetime.datetime.now(pytz.timezone('US/Central'))
+
+########################################################################################################################
+#
+# Define the initial parameters for interaction and potential
+#
+########################################################################################################################
+
+#Physical parameters
+N = 1e4                                                     #number of particles
+m = 1.4431609e-25                                           #Calculated mass of 87Rb in kg
+#m = 6.4924254610e-26                                       #Calculated mass of 39K in kg
+omeg_x = 50 * 2 * np.pi                                     #Harmonic oscillation in the x-axis in Hz
+omeg_y = 500 * 2 * np.pi                                    #Harmonic oscillation in the y-axis in Hz
+omeg_z = 500 * 2 * np.pi                                    #Harmonic oscillation in the z-axis in Hz
+omeg_cooling = 250 * 2 * np.pi                              #Harmonic oscillation for the trapping potential in Hz
+a_0 = 5.291772109e-11                                       #Bohr Radius in meters
+a_s = 100 * a_0                                             #Background scattering length in meters
+
+#Parameters calculated by Python
+L_x = np.sqrt(hbar / (m * omeg_x))                          #Characteristic length in the x-direction in meters
+L_y = np.sqrt(hbar / (m * omeg_y))                          #Characteristic length in the y-direction in meters
+L_z = np.sqrt(hbar / (m * omeg_z))                          #Characteristic length in the z-direction in meters
+g = 2 * N * L_x * m * a_s * np.sqrt(omeg_y * omeg_z) / hbar #Dimensionless interaction parameter
+
+#Conversion factors to plot in physical units
+L_xmum = np.sqrt(hbar / (m * omeg_x)) * 1e6                 #Characteristic length in the x-direction in meters
+L_ymum = np.sqrt(hbar / (m * omeg_y)) * 1e6                 #Characteristic length in the y-direction in meters
+L_zmum = np.sqrt(hbar / (m * omeg_z)) * 1e6                 #Characteristic length in the z-direction in meters
+time_ref = 1. / omeg_x *1e3                                 #Converts characteristic time into milliseconds
+energy_conv = hbar * omeg_x                                 #Converts dimensionless energy terms to Joules
+muK_conv = energy_conv * (1e6 / Boltzmann)                  #Converts Joule terms to microKelvin
+nK_conv = energy_conv * (1e9 / Boltzmann)                   #Converts Joule terms to nanoKelvin
+specvol_mum = (L_xmum * L_ymum * L_zmum) / N                #Converts dimensionless spacial terms into micrometers^3 per particle
+dens_conv = 1. / (L_xmum * L_ymum * L_zmum)                 #Calculated version of density unit conversion
+
+#External calculations of physical parameters for testing accuracy
+L_x_calc = 1.52295528474e-6                                         #Calculated characteristic length in the x-direction in micrometers
+L_y_calc = 4.81600747437e-7                                         #Calculated characteristic length in the y-direction in micrometers
+L_z_calc = 4.81600747437e-7                                         #Calculated characteristic length in the z-direction in micrometers
+L_xmum_calc = np.sqrt(1.0515718 / (14.431609 * omeg_x)) * 100       #Calculated characteristic length in the x-direction in micrometers
+L_ymum_calc = np.sqrt(1.0515718 / (14.431609 * omeg_y)) * 100       #Calculated characteristic length in the y-direction in micrometers
+L_zmum_calc = np.sqrt(1.0515718 / (14.431609 * omeg_z)) * 100       #Calculated characteristic length in the z-direction in micrometers
+muK_calc = 0.00239962237                                            #Calculated convertion to microKelvin
+specvol_mum_calc = (L_xmum_calc * L_ymum_calc * L_zmum_calc) / N    #Converts unit-less spacial terms into specific volume: micrometers^3 per particle
+dens_conv_calc = 1. / (L_xmum_calc * L_ymum_calc * L_zmum_calc)     #Calculated version of density unit conversion
+g_calc = 692.956625255                                              #Calculated dimensionless interaction parameter for
+v_0_calc = 0.5 * (omeg_cooling / omeg_x) ** 2
+
+#Parameters for computation
+propagation_dt = 1e-4
+height_asymmetric = 35                                      #Height parameter of asymmetric barrier
+delta = 5                                                   #Sharpness parameter of asymmetric barrier
+v_0 = 12.5                                                  #Coefficient for the trapping potential
+offset = 20.                                                #Center offset for cooling potential
+
+#Functions for computation
+@njit
+def v(x, t=0.):
+    """
+    Potential energy
+    """
+    return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+
+@njit
+def diff_v(x, t=0.):
+    """
+    the derivative of the potential energy for Ehrenfest theorem evaluation
+    """
+    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+
+@njit
+def diff_k(p, t=0.):
+    """
+    the derivative of the kinetic energy for Ehrenfest theorem evaluation
+    """
+    return p
+
+@njit
+def k(p, t=0.):
+    """
+    Non-relativistic kinetic energy
+    """
+    return 0.5 * p ** 2
+
+#Saves certain parameters as a separate bundle
+params = dict(
+    x_grid_dim=8 * 1024,    #for faster testing, change x_grid_dim to 8*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy.
+    x_amplitude=80.,
+    k=k,
+    diff_v=diff_v,
+    diff_k=diff_k,
+)
+
+########################################################################################################################
+#
+# Get the initial state
+#
+########################################################################################################################
+
+@njit
+def initial_trap(x, t=0):
+    """
+    Trapping potential to get the initial state
+    :param x:
+    :return:
+    """
+    return v_0 * (x + offset) ** 2
+
+#Increase first step, and then tighten with intermediate step
+init_state, mu = imag_time_gpe1D(
+    v=initial_trap,
+    g=g,
+    dt=1e-3,
+    epsilon=1e-8,
+    **params
+)
+init_state, mu = imag_time_gpe1D(
+    init_wavefunction=init_state,
+    g=g,
+    v=initial_trap,
+    dt=1e-5,
+    epsilon=1e-10,
+    **params
+)
+
+flipped_initial_trap = njit(lambda x, t: initial_trap(-x, t))
+flipped_init_state, mu_flip = imag_time_gpe1D(
+    v=flipped_initial_trap,
+    g=g,
+    dt=1e-3,
+    epsilon=1e-8,
+    **params
+)
+flipped_init_state, mu_flip = imag_time_gpe1D(
+    init_wavefunction=flipped_init_state,
+    g=g,
+    v=flipped_initial_trap,
+    dt=1e-5,
+    epsilon=1e-10,
+    **params
+)
+
+########################################################################################################################
+#
+# Plot the potential in physical units before proceeding with simulation
+#
+########################################################################################################################
+
+gpe_qsys = SplitOpGPE1D(
+    v=v,
+    g=g,
+    dt=propagation_dt,
+    **params
+)
+plt.title('Potential')
+x = gpe_qsys.x * L_xmum
+v_muK = v(x) * muK_conv
+plt.plot(x, v_muK)
+plt.xlabel('$x$ ($\mu$m) ')
+plt.ylabel('$V(x)$ ($\mu$K)')
+plt.xlim([-80 * L_xmum, 80 * L_xmum])
+plt.savefig('Potential' + '.pdf')
+plt.show()

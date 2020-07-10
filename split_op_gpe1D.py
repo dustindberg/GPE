@@ -328,7 +328,7 @@ class SplitOpGPE1D(object):
         self.previous_dt = 0
 
         # list of self.dt to monitor how the adaptive step method is working
-        self.time_incremenets = []
+        self.time_increments = []
 
         ####################################################################################################
         #
@@ -505,7 +505,7 @@ class SplitOpGPE1D(object):
             np.copyto(self.wavefunction, self.wavefunction_next)
 
             # save self.dt for monitoring purpose
-            self.time_incremenets.append(self.dt)
+            self.time_increments.append(self.dt)
 
             # increment time
             self.t += self.dt

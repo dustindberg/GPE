@@ -396,7 +396,7 @@ def analyze_propagation(qsys, wavefunctions, title):
     plt.show()
 
     plt.title('time increments $dt$')
-    plt.plot(qsys.time_incremenets)
+    plt.plot(qsys.time_increments)
     plt.ylabel('$dt$')
     plt.xlabel('time step')
     plt.show()

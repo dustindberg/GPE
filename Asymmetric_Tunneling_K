@@ -26,7 +26,7 @@ omeg_z = 500 * 2 * np.pi                                    #Harmonic oscillatio
 omeg_cooling = 250 * 2 * np.pi                              #Harmonic oscillation for the trapping potential in Hz
 a_0 = 5.291772109e-11                                       #Bohr Radius in meters
 a_s = 100 * a_0                                             #Background scattering length in meters
-scale = 0.75                                                 #Scaling factor for the interaction parameter
+scale = 0.75                                                #Scaling factor for the interaction parameter
 
 #Parameters calculated by Python
 L_x = np.sqrt(hbar / (m * omeg_x))                          #Characteristic length in the x-direction in meters
@@ -96,7 +96,7 @@ def k(p, t=0.):
 
 #Saves certain parameters as a separate bundle
 params = dict(
-    x_grid_dim=2 * 1024,    #for faster testing, change x_grid_dim to 8*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy.
+    x_grid_dim=8 * 1024,    #for faster testing, change x_grid_dim to 8*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy.
     x_amplitude=80.,
     N=N,
     k=k,

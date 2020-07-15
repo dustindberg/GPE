@@ -17,7 +17,7 @@ Start_time = datetime.datetime.now(pytz.timezone('US/Central'))
 ########################################################################################################################
 
 #Physical parameters
-N = 1e4                                                     #number of particles
+N = 1e4                                                     #Number of particles
 m = 1.4431609e-25                                           #Calculated mass of 87Rb in kg
 #m = 6.4924254610e-26                                       #Calculated mass of 39K in kg
 omeg_x = 50 * 2 * np.pi                                     #Harmonic oscillation in the x-axis in Hz
@@ -26,12 +26,13 @@ omeg_z = 500 * 2 * np.pi                                    #Harmonic oscillatio
 omeg_cooling = 250 * 2 * np.pi                              #Harmonic oscillation for the trapping potential in Hz
 a_0 = 5.291772109e-11                                       #Bohr Radius in meters
 a_s = 100 * a_0                                             #Background scattering length in meters
+scale = 0.75                                                 #Scaling factor for the interaction parameter
 
 #Parameters calculated by Python
 L_x = np.sqrt(hbar / (m * omeg_x))                          #Characteristic length in the x-direction in meters
 L_y = np.sqrt(hbar / (m * omeg_y))                          #Characteristic length in the y-direction in meters
 L_z = np.sqrt(hbar / (m * omeg_z))                          #Characteristic length in the z-direction in meters
-g = 2 * N * L_x * m * a_s * np.sqrt(omeg_y * omeg_z) / hbar #Dimensionless interaction parameter
+g = scale * 2 * N * L_x * m * a_s * np.sqrt(omeg_y * omeg_z) / hbar #Dimensionless interaction parameter
 
 #Conversion factors to plot in physical units
 L_xmum = np.sqrt(hbar / (m * omeg_x)) * 1e6                 #Characteristic length in the x-direction in meters
@@ -59,7 +60,7 @@ v_0_calc = 0.5 * (omeg_cooling / omeg_x) ** 2
 
 #Parameters for computation
 propagation_dt = 1e-4
-height_asymmetric = 35                                      #Height parameter of asymmetric barrier
+height_asymmetric = 35                                     #Height parameter of asymmetric barrier
 delta = 5                                                   #Sharpness parameter of asymmetric barrier
 v_0 = 12.5                                                  #Coefficient for the trapping potential
 offset = 20.                                                #Center offset for cooling potential
@@ -95,8 +96,9 @@ def k(p, t=0.):
 
 #Saves certain parameters as a separate bundle
 params = dict(
-    x_grid_dim=8 * 1024,    #for faster testing, change x_grid_dim to 8*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy.
+    x_grid_dim=2 * 1024,    #for faster testing, change x_grid_dim to 8*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy.
     x_amplitude=80.,
+    N=N,
     k=k,
     diff_v=diff_v,
     diff_k=diff_k,
@@ -200,6 +202,7 @@ chem_potential = v_0 ** (1/3) * (3 * g / 4) ** (2/3)                    #formula
 mu_nKelvin = mu * nK_conv                                               #Converts chemical potential to units of nanoKelvin
 
 rhs = tf_test(chem_potential, initial_trap(x), g)
+#rhs = tf_test(mu, initial_trap(x), g)
 lhs = np.abs(init_state) ** 2
 
 #TF Approx plot
@@ -207,8 +210,8 @@ figTFA = plt.figure(fignum, figsize=(16,6))
 fignum+=1
 plt.subplot(121)
 plt.title('Initial Trap')
-plt.plot(x_mum, rhs, label='Thomas Fermi')
-plt.plot(x_mum, lhs, label='GPE')
+plt.semilogy(x_mum, rhs, label='Thomas Fermi')
+plt.semilogy(x_mum, lhs, label='GPE')
 plt.xlim([-40, -20])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
@@ -216,13 +219,15 @@ plt.ylabel('Density (dimensionless)')
 
 #Flip the initial conditions
 rhs = tf_test(chem_potential, flipped_initial_trap(x, 0), g)
+#rhs = tf_test(mu_flip, flipped_initial_trap(x,0), g)
 lhs = np.abs(flipped_init_state) ** 2
+
 
 #TF Approx plot flipped
 plt.subplot(122)
 plt.title('Flipped Initial Trap')
-plt.plot(x_mum, rhs, label='Thomas Fermi')
-plt.plot(x_mum, lhs, label='GPE')
+plt.semilogy(x_mum, rhs, label='Thomas Fermi')
+plt.semilogy(x_mum, lhs, label='GPE')
 plt.xlim([20, 40])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
@@ -244,13 +249,14 @@ def analyze_propagation(qsys, wavefunctions, title, fignum):
     :param title: str
     :return: None
     """
+
+    #plot the density over time
     figdensplot = plt.figure(fignum, figsize=(8,6))
     fignum+=1
     plt.title(title)
     plot_title = title
     # plot the time dependent density
-    extent = [0., T, qsys.x.min(), qsys.x.max()]
-
+    extent = [qsys.x.min(), qsys.x.max(), 0., T]
     plt.imshow(
         np.abs(wavefunctions) ** 2,
         # some plotting parameters
@@ -269,8 +275,8 @@ def analyze_propagation(qsys, wavefunctions, title, fignum):
     fignum+=1
     times = qsys.times
     t_ms = np.asarray(times) * time_conv
-    plt.subplot(131)
-    plt.title("Verify the first Ehrenfest theorem", pad = 10)
+    plt.subplot(141)
+    plt.title("Verify the first Ehrenfest theorem", pad = 15)
 
     plt.plot(
         t_ms,
@@ -290,8 +296,8 @@ def analyze_propagation(qsys, wavefunctions, title, fignum):
     plt.ylabel('momentum')
     plt.xlabel('time $t$ (ms)')
 
-    plt.subplot(132)
-    plt.title("Verify the second Ehrenfest theorem", pad = 10)
+    plt.subplot(142)
+    plt.title("Verify the second Ehrenfest theorem", pad = 15)
 
     plt.plot(
         t_ms,
@@ -306,8 +312,8 @@ def analyze_propagation(qsys, wavefunctions, title, fignum):
     plt.ylabel('force')
     plt.xlabel('time $t$ (ms)')
 
-    plt.subplot(133)
-    plt.title("The expectation value of the hamiltonian", pad = 10)
+    plt.subplot(143)
+    plt.title("The expectation value of the hamiltonian", pad = 15)
 
     # Analyze how well the energy was preserved
     h = np.array(qsys.hamiltonian_average)
@@ -321,14 +327,14 @@ def analyze_propagation(qsys, wavefunctions, title, fignum):
     plt.plot(t_ms, h * muK_calc)
     plt.ylabel('energy ($\mu$K)')
     plt.xlabel('time $t$ (ms)')
-    plt.savefig('EFT_' + plot_title + '.pdf')
 
-    figdt = plt.figure(fignum, figsize=(8,6))
-    fignum+=1
-    plt.title('time increments $dt$')
+    plt.subplot(144)
+    plt.title('time increments $dt$', pad = 15)
     plt.plot(qsys.time_increments)
     plt.ylabel('$dt$')
     plt.xlabel('time step')
+    figefr.suptitle(plot_title)
+    plt.savefig('EFT_' + plot_title + '.pdf')
 
     return fignum
 

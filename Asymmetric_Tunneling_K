@@ -16,17 +16,24 @@ Start_time = datetime.datetime.now(pytz.timezone('US/Central'))
 #
 ########################################################################################################################
 
-#Physical parameters
+#Define physical parameters
+a_0 = 5.291772109e-11                                       #Bohr Radius in meters
+
+#Rubidium-87 properties
+#m = 1.4431609e-25                                          #Calculated mass of 87Rb in kg
+#a_s = 100 * a_0                                            #Background scattering length of 87Rb in meters
+
+#Potassium-41 properties
+m= 6.80187119e-26                                           #Calculated mass of 41K in kg
+a_s = 65.42 * a_0                                           #Background scattering length of 41K in meters
+
+#Experiment parameters
 N = 1e4                                                     #Number of particles
-m = 1.4431609e-25                                           #Calculated mass of 87Rb in kg
-#m = 6.4924254610e-26                                       #Calculated mass of 39K in kg
 omeg_x = 50 * 2 * np.pi                                     #Harmonic oscillation in the x-axis in Hz
 omeg_y = 500 * 2 * np.pi                                    #Harmonic oscillation in the y-axis in Hz
 omeg_z = 500 * 2 * np.pi                                    #Harmonic oscillation in the z-axis in Hz
 omeg_cooling = 250 * 2 * np.pi                              #Harmonic oscillation for the trapping potential in Hz
-a_0 = 5.291772109e-11                                       #Bohr Radius in meters
-a_s = 100 * a_0                                             #Background scattering length in meters
-scale = 1                                                #Scaling factor for the interaction parameter
+scale = 1                                                   #Scaling factor for the interaction parameter
 
 #Parameters calculated by Python
 L_x = np.sqrt(hbar / (m * omeg_x))                          #Characteristic length in the x-direction in meters
@@ -55,8 +62,8 @@ L_zmum_calc = np.sqrt(1.0515718 / (14.431609 * omeg_z)) * 100       #Calculated 
 muK_calc = 0.00239962237                                            #Calculated convertion to microKelvin
 specvol_mum_calc = (L_xmum_calc * L_ymum_calc * L_zmum_calc) / N    #Converts unit-less spacial terms into specific volume: micrometers^3 per particle
 dens_conv_calc = 1. / (L_xmum_calc * L_ymum_calc * L_zmum_calc)     #Calculated version of density unit conversion
-g_calc = 692.956625255                                              #Calculated dimensionless interaction parameter for
-v_0_calc = 0.5 * (omeg_cooling / omeg_x) ** 2
+g_calc = 692.956625255                                              #Calculated dimensionless interaction parameter for 87Rb at 1000 particles
+v_0_calc = 0.5 * (omeg_cooling / omeg_x) ** 2                       #Python calculated coefficient for the cooling potential (unreliable)
 
 #Parameters for computation
 propagation_dt = 1e-4
@@ -213,7 +220,7 @@ plt.subplot(221)
 plt.title('Initial Trap')
 plt.plot(x_mum, rhs, label='Thomas Fermi')
 plt.plot(x_mum, lhs, label='GPE')
-plt.xlim([-40, -20])
+#plt.xlim([-40, -20])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
 plt.ylabel('Density (dimensionless)')
@@ -222,7 +229,7 @@ plt.subplot(223)
 plt.title('Initial Trap in log scale')
 plt.semilogy(x_mum, rhs, label='Thomas Fermi')
 plt.semilogy(x_mum, lhs, label='GPE')
-plt.xlim([-40, -20])
+#plt.xlim([-40, -20])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
 plt.ylabel('Density (dimensionless)')
@@ -238,7 +245,7 @@ plt.subplot(222)
 plt.title('Flipped Initial Trap')
 plt.plot(x_mum, rhs, label='Thomas Fermi')
 plt.plot(x_mum, lhs, label='GPE')
-plt.xlim([20, 40])
+#plt.xlim([20, 40])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
 plt.ylabel('Density (dimensionless)')
@@ -247,7 +254,7 @@ plt.subplot(224)
 plt.title('Flipped Initial Trap in log scale')
 plt.semilogy(x_mum, rhs, label='Thomas Fermi')
 plt.semilogy(x_mum, lhs, label='GPE')
-plt.xlim([20, 40])
+#plt.xlim([20, 40])
 plt.legend(numpoints=1)
 plt.xlabel('$x$ ($\mu$m)')
 plt.ylabel('Density (dimensionless)')
@@ -255,7 +262,7 @@ plt.ylabel('Density (dimensionless)')
 figTFA.suptitle('Thomas-Fermi Approximations')
 plt.savefig('Thomas-Fermi Approximations' + '.pdf')
 
-plt.show()
+#plt.show()
 
 ########################################################################################################################
 #

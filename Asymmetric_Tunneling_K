@@ -39,7 +39,7 @@ scale = 1                                                   #Scaling factor for 
 L_x = np.sqrt(hbar / (m * omeg_x))                          #Characteristic length in the x-direction in meters
 L_y = np.sqrt(hbar / (m * omeg_y))                          #Characteristic length in the y-direction in meters
 L_z = np.sqrt(hbar / (m * omeg_z))                          #Characteristic length in the z-direction in meters
-g = 2 * N * L_x * m * a_s * np.sqrt(omeg_y * omeg_z) / hbar #Dimensionless interaction parameter
+g = 2 * N * L_x * m * scale * a_s * np.sqrt(omeg_y * omeg_z) / hbar #Dimensionless interaction parameter
 
 #Conversion factors to plot in physical units
 L_xmum = np.sqrt(hbar / (m * omeg_x)) * 1e6                 #Characteristic length in the x-direction in meters
@@ -67,7 +67,7 @@ v_0_calc = 0.5 * (omeg_cooling / omeg_x) ** 2                       #Python calc
 
 #Parameters for computation
 propagation_dt = 1e-4
-height_asymmetric = 35                                     #Height parameter of asymmetric barrier
+height_asymmetric = 35                                      #Height parameter of asymmetric barrier
 delta = 5                                                   #Sharpness parameter of asymmetric barrier
 v_0 = 12.5                                                  #Coefficient for the trapping potential
 offset = 20.                                                #Center offset for cooling potential

@@ -148,9 +148,9 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
 
         # get momentum density
         density = np.abs(pis_p) ** 2
-        density /= density.sum() * dx
+        density /= density.sum()
 
-        energy += np.sum(k * density) * dx
+        energy += np.sum(k * density)
 
         return energy + v_min
 

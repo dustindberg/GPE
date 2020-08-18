@@ -235,9 +235,7 @@ plt.plot(x, initial_trap(x) * muK_calc)
 plt.xlabel('$x$ ($\mu$m) ')
 plt.ylabel('$V(x)$ ($\mu$K)')
 plt.xlim([-80 * L_xmum, 80 * L_xmum])
-
 plt.savefig('Trapping Potential' + '.pdf')
-
 plt.show()
 
 #Increase first step, and then tighten with intermediate step

@@ -20,19 +20,19 @@ Start_time = datetime.datetime.now(pytz.timezone('US/Central'))
 a_0 = 5.291772109e-11                                       #Bohr Radius in meters
 
 #Rubidium-87 properties
-#m = 1.4431609e-25                                          #Calculated mass of 87Rb in kg
-#a_s = 100 * a_0                                            #Background scattering length of 87Rb in meters
+m = 1.4431609e-25                                          #Calculated mass of 87Rb in kg
+a_s = 100 * a_0                                            #Background scattering length of 87Rb in meters
 
 #Potassium-41 properties
-m= 6.80187119e-26                                           #Calculated mass of 41K in kg
-a_s = 65.42 * a_0                                           #Background scattering length of 41K in meters
+#m= 6.80187119e-26                                           #Calculated mass of 41K in kg
+#a_s = 65.42 * a_0                                           #Background scattering length of 41K in meters
 
 #Experiment parameters
 N = 1e4                                                     #Number of particles
 omeg_x = 50 * 2 * np.pi                                     #Harmonic oscillation in the x-axis in Hz
 omeg_y = 500 * 2 * np.pi                                    #Harmonic oscillation in the y-axis in Hz
 omeg_z = 500 * 2 * np.pi                                    #Harmonic oscillation in the z-axis in Hz
-omeg_cooling = 250 * 2 * np.pi                              #Harmonic oscillation for the trapping potential in Hz
+omeg_cooling = 450 * 2 * np.pi                              #Harmonic oscillation for the trapping potential in Hz
 scale = 1                                                   #Scaling factor for the interaction parameter
 
 #Parameters calculated by Python
@@ -69,8 +69,11 @@ v_0_calc = 0.5 * (omeg_cooling / omeg_x) ** 2                       #Python calc
 propagation_dt = 1e-4
 height_asymmetric = 35                                      #Height parameter of asymmetric barrier
 delta = 5                                                   #Sharpness parameter of asymmetric barrier
-v_0 = 12.5                                                  #Coefficient for the trapping potential
-offset = 20.                                                #Center offset for cooling potential
+v_0 = 45.5                                                    #Coefficient for the trapping potential
+offset = 40.                                                #Center offset for cooling potential
+fignum = 1                                                  #Declare starting figure number
+x_amplitude = 80.                                           #Set the range for calculation
+
 
 #Functions for computation
 @njit
@@ -78,14 +81,16 @@ def v(x, t=0.):
     """
     Potential energy
     """
-    return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    #return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    return 3000 - 2800 * np.exp(-((x + offset)/ 45) ** 2) - 2850 * np.exp(-((x - offset) / 47) ** 2) - 100 * np.exp(-((x - 5) / 10) ** 2)
 
 @njit
 def diff_v(x, t=0.):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
-    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    #return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    return (224 / 81) * (x + offset) * np.exp(-((x + offset)/ 45) ** 2) + (5700 / 2209) * (x - offset) * np.exp(-((x - offset) / 47) ** 2) + 2 * (x - 5) * np.exp(-((x - 5) / 10) ** 2)
 
 @njit
 def diff_k(p, t=0.):
@@ -101,10 +106,11 @@ def k(p, t=0.):
     """
     return 0.5 * p ** 2
 
+
 #Saves certain parameters as a separate bundle
 params = dict(
-    x_grid_dim=16 * 1024,    #for faster testing, change x_grid_dim to 8*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy.
-    x_amplitude=80.,
+    x_grid_dim=8 * 1024,    #for faster testing, change x_grid_dim to 8*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy.
+    x_amplitude=x_amplitude,
     N=N,
     k=k,
     diff_v=diff_v,
@@ -160,6 +166,23 @@ flipped_init_state, mu_flip = imag_time_gpe1D(
     **params
 )
 
+gpe_qsys = SplitOpGPE1D(
+    v=v,
+    g=g,
+    dt=propagation_dt,
+    **params
+)
+
+
+figTrap = plt.figure(fignum, figsize=(8,6))
+fignum+=1
+plt.title('Trapping Potential')
+x = gpe_qsys.x * L_xmum
+plt.plot(x, initial_trap(x) * muK_conv)
+plt.xlabel('$x$ ($\mu$m) ')
+plt.ylabel('$V(x)$ ($\mu$K)')
+plt.xlim([-80 * L_xmum, 80 * L_xmum])
+plt.savefig('Trapping Potential' + '.png')
 
 ########################################################################################################################
 #
@@ -174,18 +197,45 @@ gpe_qsys = SplitOpGPE1D(
     **params
 )
 
-fignum = 1
+dx = gpe_qsys.dx
+x_cut = int(0.645 * gpe_qsys.wavefunction.size)               #These are cuts such that we observe the behavior about the initial location of the wave
+x_cut_flipped = int(0.355 * gpe_qsys.wavefunction.size)
+
+@njit
+def v_muKelvin(v):
+    """"
+    The potential energy with corrected units microKelvin
+    """
+    #return v * muKelvin_conv
+    return v * muK_calc
+
 figV = plt.figure(fignum, figsize=(8,6))
 fignum+=1
 plt.title('Potential')
 x = gpe_qsys.x * L_xmum
 v_muK = v(x) * muK_conv
+potential = v_muKelvin(v(x))
 plt.plot(x, v_muK)
+plt.fill_between(
+    x[x_cut:],
+   potential[x_cut:],
+    potential.min(),
+    facecolor="orange",
+         color='orange',
+      alpha=0.2
+)
+plt.fill_between(
+    x[:x_cut_flipped],
+    potential[:x_cut_flipped],
+    potential.min(),
+    facecolor="green",
+         color='green',
+      alpha=0.2
+)
 plt.xlabel('$x$ ($\mu$m) ')
 plt.ylabel('$V(x)$ ($\mu$K)')
 plt.xlim([-80 * L_xmum, 80 * L_xmum])
-plt.savefig('Potential' + '.pdf')
-
+plt.savefig('Potential' + '.png')
 
 ########################################################################################################################
 #
@@ -260,7 +310,7 @@ plt.xlabel('$x$ ($\mu$m)')
 plt.ylabel('Density (dimensionless)')
 
 figTFA.suptitle('Thomas-Fermi Approximations')
-plt.savefig('Thomas-Fermi Approximations' + '.pdf')
+plt.savefig('Thomas-Fermi Approximations' + '.png')
 
 #plt.show()
 
@@ -298,7 +348,7 @@ def analyze_propagation(qsys, wavefunctions, title, fignum):
     plt.xlabel('coordinate $x$ (a.u.)')
     plt.ylabel('time $t$ (a.u.)')
     plt.colorbar()
-    plt.savefig(title + '.pdf')
+    plt.savefig(title + '.png')
 
 
     figefr = plt.figure(fignum, figsize=(24,6))
@@ -364,7 +414,7 @@ def analyze_propagation(qsys, wavefunctions, title, fignum):
     plt.ylabel('$dt$')
     plt.xlabel('time step')
     figefr.suptitle(plot_title)
-    plt.savefig('EFT_' + plot_title + '.pdf')
+    plt.savefig('EFT_' + plot_title + '.png')
 
     return fignum
 
@@ -490,9 +540,6 @@ fignum = analyze_propagation(
 #
 ########################################################################################################################
 
-dx = gpe_qsys.dx
-x_cut = int(0.6 * gpe_qsys.wavefunction.size)               #These are cuts such that we observe the behavior about the initial location of the wave
-x_cut_flipped = int(0.4 * gpe_qsys.wavefunction.size)
 
 figTP = plt.figure(fignum,figsize=(18,6))
 fignum+=1
@@ -525,7 +572,7 @@ plt.plot(
 plt.legend()
 plt.xlabel('time $t$ (ms)')
 plt.ylabel("transmission probability")
-plt.savefig('Transmission Probability' + '.pdf')
+plt.savefig('Transmission Probability' + '.png')
 
 End_time = datetime.datetime.now(pytz.timezone('US/Central'))
 

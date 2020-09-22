@@ -83,6 +83,7 @@ def v(x, t=0.):
     """
     return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     #return 3000 - 2800 * np.exp(-((x + offset)/ 45) ** 2) - 2850 * np.exp(-((x - offset) / 47) ** 2) - 100 * np.exp(-((x - 5) / 10) ** 2)
+    #test
 
 @njit
 def diff_v(x, t=0.):

@@ -35,6 +35,8 @@ omeg_z = 500 * 2 * np.pi                                    #Harmonic oscillatio
 omeg_cooling = 450 * 2 * np.pi                              #Harmonic oscillation for the trapping potential in Hz
 scale = 1                                                   #Scaling factor for the interaction parameter
 
+#x = x(with units in meters) / L_x (a constant that also has units of meters)
+
 #Parameters calculated by Python
 L_x = np.sqrt(hbar / (m * omeg_x))                          #Characteristic length in the x-direction in meters
 L_y = np.sqrt(hbar / (m * omeg_y))                          #Characteristic length in the y-direction in meters
@@ -151,6 +153,7 @@ init_state, mu = imag_time_gpe1D(
     **params
 )
 
+
 flipped_initial_trap = njit(lambda x, t: initial_trap(-x, t))
 flipped_init_state, mu_flip = imag_time_gpe1D(
     v=flipped_initial_trap,
@@ -200,7 +203,7 @@ gpe_qsys = SplitOpGPE1D(
 )
 
 dx = gpe_qsys.dx
-x_cut = int(0.6 * gpe_qsys.wavefunction.size)               #These are cuts such that we observe the behavior about the initial location of the wave
+x_cut = int(0.6 * gpe_qsys.wavefunction.size)                                                                           #These are cuts such that we observe the behavior about the initial location of the wave
 x_cut_flipped = int(0.4 * gpe_qsys.wavefunction.size)
 
 @njit
@@ -435,9 +438,9 @@ gpe_qsys = SplitOpGPE1D(
     **params
 )
 gpe_qsys.set_wavefunction(init_state)
-
+# * np.exp(1j * gpe_qsys.x * np.sqrt(2 * m * ))
 # get time duration of 2 periods
-T = 2. * 2. * np.pi
+T = .5 * 2. * 2. * np.pi
 times = np.linspace(0, T, 500)
 t_msplot = times * time_conv
 # propagate till time T and for each time step save a probability density

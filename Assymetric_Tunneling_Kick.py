@@ -53,10 +53,10 @@ dens_conv = 1. / (L_xmum * L_ymum * L_zmum)                                     
 
 # Parameters for computation
 propagation_dt = 1e-4
-height_asymmetric = 35                                                                                                  # Height parameter of asymmetric barrier
-delta = 5                                                                                                               # Sharpness parameter of asymmetric barrier
+height_asymmetric = 35.                                                                                                 # Height parameter of asymmetric barrier
+delta = 5.                                                                                                              # Sharpness parameter of asymmetric barrier
 v_0 = 45.5                                                                                                              # Coefficient for the trapping potential
-offset = 20.                                                                                                            # Center offset for cooling potential
+offset = 20.                                                                                                            # width offset for gaussian potentials
 
 # Functions for computation
 @njit
@@ -96,7 +96,7 @@ def initial_trap(x, t=0):
     :param x:
     :return:
     """
-    return v_0 * (x + offset) ** 2
+    return v_0 * x ** 2
 
 ########################################################################################################################
 # Declare parallel functions
@@ -137,7 +137,10 @@ def run_single_case(params):
         g=g,
         dt=propagation_dt,
         **params
-    ).set_wavefunction(init_state)
+    )
+    gpe_propagator.set_wavefunction(
+        init_state * np.exp(1j * params['init_momentum_kick'] * gpe_propagator.x)
+    )
 
     # propagate till time T and for each time step save a probability density
     gpe_wavefunctions = [
@@ -155,7 +158,10 @@ def run_single_case(params):
         g=0.,
         dt=propagation_dt,
         **params
-    ).set_wavefunction(init_state)
+    )
+    schrodinger_propagator.set_wavefunction(
+        init_state * np.exp(1j * params['init_momentum_kick'] * schrodinger_propagator.x)
+    )
 
     # Propagate till time T and for each time step save a probability density
     schrodinger_wavefunctions = [
@@ -215,20 +221,21 @@ if __name__ == '__main__':
     t_msplot = times * time_conv                                                                                        # Declare time with units of ms for plotting
 
     # save parameters as a separate bundle
-    sys_params = dict(
+    sys_params_right = dict(
         x_amplitude = 80.,                                                                                              # Set the range for calculation
-        x_grid_dim = 1 * 1024,                                                                                         # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
+        x_grid_dim = 8 * 1024,                                                                                          # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
         N = N,
         k = k,
+        init_momentum_kick = 1.,
         initial_trap = initial_trap,
         diff_v = diff_v,
         diff_k = diff_k,
         times = times,
     )
 
-    sys_params_flipped = sys_params.copy()                                                                              #copy to create parameters for the flipped case
+    sys_params_left = sys_params_right.copy()                                                                           #copy to create parameters for the flipped case
 
-    sys_params_flipped['initial_trap'] = njit(lambda x, t: initial_trap(-x, t))                                         #This is used to flip the initial trap about the offset
+    sys_params_left['init_momentum_kick'] = -sys_params_left['init_momentum_kick']                                      #This is used to flip the kick of the momentum about the offset
 
     ####################################################################################################################
     # Run calculations in parallel
@@ -236,14 +243,14 @@ if __name__ == '__main__':
 
     # Get the unflip and flip simulations run in parallel;
     with Pool() as pool:
-        qsys, qsys_flipped = pool.map(run_single_case, [sys_params, sys_params_flipped])                                # Results will be saved in qsys and qsys_flipped, respectively
+        qsys_right, qsys_left = pool.map(run_single_case, [sys_params_right, sys_params_left])                          # Results will be saved in qsys and qsys_flipped, respectively
 
     ####################################################################################################################
     # Plot the potential in physical units before proceeding with simulation
     ####################################################################################################################
 
-    dx = qsys['gpe']['dx']
-    size = qsys['gpe']['x'].size
+    dx = qsys_right['gpe']['dx']
+    size = qsys_right['gpe']['x'].size
     x_cut = int(0.6 * size)                                                                                             #These are cuts such that we observe the behavior about the initial location of the wave
     x_cut_flipped = int(0.4 * size)
 
@@ -257,7 +264,7 @@ if __name__ == '__main__':
     figV = plt.figure(fignum, figsize=(8,6))
     fignum+=1
     plt.title('Potential')
-    x = qsys['gpe']['x']
+    x = qsys_right['gpe']['x']
     x_mum = x * L_xmum
     v_muK = v(x) * muK_conv
     potential = v_muKelvin(v(x))
@@ -305,11 +312,11 @@ if __name__ == '__main__':
         figefr = plt.figure(fignum, figsize=(24,6))
         fignum += 1
         times = qsys['times']
-        t_ms = np.array(times) * time_conv
+        t_ms = np.asarray(times) * time_conv
         plt.subplot(141)
         plt.title("Verify the first Ehrenfest theorem", pad = 15)
         # Calculate the derivative using the spline interpolation because times is not a linearly spaced array
-        plt.plot(t_ms, UnivariateSpline(times, qsys['x_average'], s=0).derivative()(times),
+        plt.plot(times, UnivariateSpline(times, qsys['x_average'], s=0).derivative()(times),
                  '-r', label='$d\\langle\\hat{x}\\rangle / dt$')
         plt.plot(times, qsys['x_average_rhs'], '--b',label='$\\langle\\hat{p}\\rangle$')
         plt.legend()
@@ -357,16 +364,16 @@ if __name__ == '__main__':
     ####################################################################################################################
 
     # Analyze the schrodinger propagation
-    fignum = analyze_propagation(qsys['schrodinger'], "Schrodinger evolution", fignum)
+    fignum = analyze_propagation(qsys_right['schrodinger'], "Schrodinger evolution", fignum)
 
     # Analyze the Flipped schrodinger propagation
-    fignum = analyze_propagation(qsys_flipped['schrodinger'], "Flipped Schrodinger evolution", fignum)
+    fignum = analyze_propagation(qsys_left['schrodinger'], "Flipped Schrodinger evolution", fignum)
 
     # Analyze the GPE propagation
-    fignum = analyze_propagation(qsys['gpe'], "GPE evolution", fignum)
+    fignum = analyze_propagation(qsys_right['gpe'], "GPE evolution", fignum)
 
     # Analyze the Flipped GPE propagation
-    fignum = analyze_propagation(qsys_flipped['gpe'], "Flipped GPE evolution", fignum)
+    fignum = analyze_propagation(qsys_left['gpe'], "Flipped GPE evolution", fignum)
 
     ########################################################################################################################
     # Calculate and plot the transmission probability
@@ -377,12 +384,12 @@ if __name__ == '__main__':
     plt.subplot(121)
     plt.plot(
         t_msplot,
-        np.sum(np.abs(qsys['schrodinger']['wavefunctions'])[:, x_cut:] ** 2, axis=1) * dx,
+        np.sum(np.abs(qsys_right['schrodinger']['wavefunctions'])[:, x_cut:] ** 2, axis=1) * dx,
         label='Schrodinger'
     )
     plt.plot(
         t_msplot,
-        np.sum(np.abs(qsys_flipped['schrodinger']['wavefunctions'])[:, :x_cut_flipped] ** 2, axis=1) * dx,
+        np.sum(np.abs(qsys_left['schrodinger']['wavefunctions'])[:, :x_cut_flipped] ** 2, axis=1) * dx,
         label='Flipped Schrodinger'
     )
     plt.legend()
@@ -392,12 +399,12 @@ if __name__ == '__main__':
     plt.subplot(122)
     plt.plot(
         t_msplot,
-        np.sum(np.abs(qsys['gpe']['wavefunctions'])[:, x_cut:] ** 2, axis=1) * dx,
+        np.sum(np.abs(qsys_right['gpe']['wavefunctions'])[:, x_cut:] ** 2, axis=1) * dx,
         label='GPE'
     )
     plt.plot(
         t_msplot,
-        np.sum(np.abs(qsys_flipped['gpe']['wavefunctions'])[:, :x_cut_flipped] ** 2, axis=1) * dx,
+        np.sum(np.abs(qsys_left['gpe']['wavefunctions'])[:, :x_cut_flipped] ** 2, axis=1) * dx,
         label='Flipped GPE'
     )
     plt.legend()

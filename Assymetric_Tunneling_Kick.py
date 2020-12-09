@@ -251,8 +251,8 @@ if __name__ == '__main__':
 
     dx = qsys_right['gpe']['dx']
     size = qsys_right['gpe']['x'].size
-    x_cut = int(0.6 * size)                                                                                             #These are cuts such that we observe the behavior about the initial location of the wave
-    x_cut_flipped = int(0.4 * size)
+    x_cut_right = int(0.58 * size)                                                                                             #These are cuts such that we observe the behavior about the initial location of the wave
+    x_cut_left = int(0.42 * size)
 
     @njit
     def v_muKelvin(v):
@@ -375,42 +375,105 @@ if __name__ == '__main__':
     # Analyze the Flipped GPE propagation
     fignum = analyze_propagation(qsys_left['gpe'], "Flipped GPE evolution", fignum)
 
-    ########################################################################################################################
+    ####################################################################################################################
     # Calculate and plot the transmission probability
-    ########################################################################################################################
+    ####################################################################################################################
 
-    figTP = plt.figure(fignum,figsize=(18,6))
+    figTPL = plt.figure(fignum,figsize=(25,6))
     fignum += 1
-    plt.subplot(121)
+    plt.title("Probability of particle on the Left")
+    plt.subplot(131)
     plt.plot(
         t_msplot,
-        np.sum(np.abs(qsys_right['schrodinger']['wavefunctions'])[:, x_cut:] ** 2, axis=1) * dx,
-        label='Schrodinger'
+        np.sum(np.abs(qsys_right['schrodinger']['wavefunctions'])[:, x_cut_right:] ** 2, axis=1) * dx,
+        label='Schrodinger kicked to the right'
     )
     plt.plot(
         t_msplot,
-        np.sum(np.abs(qsys_left['schrodinger']['wavefunctions'])[:, :x_cut_flipped] ** 2, axis=1) * dx,
-        label='Flipped Schrodinger'
+        1 - np.sum(np.abs(qsys_left['schrodinger']['wavefunctions'])[:, x_cut_right:] ** 2, axis=1) * dx,
+        label='Schrodinger kicked to the left'
     )
     plt.legend()
     plt.xlabel('time $t$ (ms)')
     plt.ylabel("transmission probability")
 
-    plt.subplot(122)
+    plt.subplot(132)
     plt.plot(
         t_msplot,
-        np.sum(np.abs(qsys_right['gpe']['wavefunctions'])[:, x_cut:] ** 2, axis=1) * dx,
-        label='GPE'
+        np.sum(np.abs(qsys_right['gpe']['wavefunctions'])[:, x_cut_right:] ** 2, axis=1) * dx,
+        label='GPE kicked to the right'
     )
     plt.plot(
         t_msplot,
-        np.sum(np.abs(qsys_left['gpe']['wavefunctions'])[:, :x_cut_flipped] ** 2, axis=1) * dx,
-        label='Flipped GPE'
+        1 - np.sum(np.abs(qsys_left['gpe']['wavefunctions'])[:, x_cut_right:] ** 2, axis=1) * dx,
+        label='GPE kicked to the left'
     )
     plt.legend()
-    plt.xlabel('Time $t$ (ms)')
-    plt.ylabel("Transmission Probability")
-    plt.savefig('Transmission Probability' + '.png')
+    plt.xlabel('time $t$ (ms)')
+    plt.ylabel("transmission probability")
+
+    plt.subplot(133)
+    plt.plot(x_mum, v_muK)
+    plt.fill_between(
+        x_mum[x_cut_right:],
+        potential[x_cut_right:],
+        potential.max(),
+        facecolor="orange",
+             color='orange',
+          alpha=0.2
+    )
+    plt.xlabel('$x$ ($\mu$m) ')
+    plt.ylabel('$V(x)$ ($\mu$K) Region')
+    plt.xlim([-80 * L_xmum, 80 * L_xmum])
+    plt.savefig('Transmission Probability Right' + '.png')
+
+    figTPR = plt.figure(fignum,figsize=(25,6))
+    fignum += 1
+    plt.title("Probability of particle on the Right")
+    plt.subplot(131)
+    plt.plot(
+        t_msplot,
+        np.sum(np.abs(qsys_right['schrodinger']['wavefunctions'])[:, x_cut_left:] ** 2, axis=1) * dx,
+        label='Schrodinger kicked to the right'
+    )
+    plt.plot(
+        t_msplot,
+        np.sum(np.abs(qsys_left['schrodinger']['wavefunctions'])[:, x_cut_left:] ** 2, axis=1) * dx,
+        label='Schrodinger kicked to the left'
+    )
+    plt.legend()
+    plt.xlabel('time $t$ (ms)')
+    plt.ylabel("transmission probability")
+
+    plt.subplot(132)
+    plt.plot(
+        t_msplot,
+        np.sum(np.abs(qsys_right['gpe']['wavefunctions'])[:, x_cut_left:] ** 2, axis=1) * dx,
+        label='GPE kicked to the right'
+    )
+    plt.plot(
+        t_msplot,
+        np.sum(np.abs(qsys_left['gpe']['wavefunctions'])[:, x_cut_left:] ** 2, axis=1) * dx,
+        label='GPE kicked to the left'
+    )
+    plt.legend()
+    plt.xlabel('time $t$ (ms)')
+    plt.ylabel("transmission probability")
+
+    plt.subplot(133)
+    plt.plot(x_mum, v_muK)
+    plt.fill_between(
+        x_mum[:x_cut_left],
+        potential[:x_cut_left],
+        potential.max(),
+        facecolor="orange",
+             color='orange',
+          alpha=0.2
+    )
+    plt.xlabel('$x$ ($\mu$m) ')
+    plt.ylabel('$V(x)$ ($\mu$K) Region')
+    plt.xlim([-80 * L_xmum, 80 * L_xmum])
+    plt.savefig('Transmission Probability Left' + '.png')
 
     End_time = datetime.datetime.now(pytz.timezone('US/Central'))                                                       # Get current time to finish timing of program
 

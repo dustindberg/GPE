@@ -4,59 +4,59 @@ from matplotlib.colors import Normalize, SymLogNorm
 import numpy as np
 from scipy.constants import hbar, Boltzmann
 from scipy.interpolate import UnivariateSpline
-from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D                                                                # class for the split operator propagation
+from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D # class for the split operator propagation
 import datetime
 import pytz
 from multiprocessing import Pool
 
-Start_time = datetime.datetime.now(pytz.timezone('US/Central'))                                                         # Start timing for optimizing runs
+Start_time = datetime.datetime.now(pytz.timezone('US/Central')) # Start timing for optimizing runs
 
 ########################################################################################################################
 # Define the initial parameters for interaction and potential
 ########################################################################################################################
 
 # Define physical parameters
-a_0 = 5.291772109e-11                                                                                                   # Bohr Radius in meters
+a_0 = 5.291772109e-11 # Bohr Radius in meters
 
 # Rubidium-87 properties
-m = 1.4431609e-25                                                                                                       # Calculated mass of 87Rb in kg
-a_s = 100 * a_0                                                                                                         # Background scattering length of 87Rb in meters
+m = 1.4431609e-25 # Calculated mass of 87Rb in kg
+a_s = 100 * a_0 # Background scattering length of 87Rb in meters
 
 # Potassium-41 properties
-# m= 6.80187119e-26                                                                                                      # Calculated mass of 41K in kg
-# a_s = 65.42 * a_0                                                                                                      # Background scattering length of 41K in meters
+# m= 6.80187119e-26 # Calculated mass of 41K in kg
+# a_s = 65.42 * a_0 # Background scattering length of 41K in meters
 
 # Experiment parameters
-N = 1e4                                                                                                                 # Number of particles
-omeg_x = 50 * 2 * np.pi                                                                                                 # Harmonic oscillation in the x-axis in Hz
-omeg_y = 500 * 2 * np.pi                                                                                                # Harmonic oscillation in the y-axis in Hz
-omeg_z = 500 * 2 * np.pi                                                                                                # Harmonic oscillation in the z-axis in Hz
-omeg_cooling = 450 * 2 * np.pi                                                                                          # Harmonic oscillation for the trapping potential in Hz
-scale = 1                                                                                                               # Scaling factor for the interaction parameter
+N = 1e4                         # Number of particles
+omeg_x = 50 * 2 * np.pi         # Harmonic oscillation in the x-axis in Hz
+omeg_y = 500 * 2 * np.pi        # Harmonic oscillation in the y-axis in Hz
+omeg_z = 500 * 2 * np.pi        # Harmonic oscillation in the z-axis in Hz
+omeg_cooling = 450 * 2 * np.pi  # Harmonic oscillation for the trapping potential in Hz
+scale = 1                       # Scaling factor for the interaction parameter
 
 # Parameters calculated by Python
-L_x = np.sqrt(hbar / (m * omeg_x))                                                                                      # Characteristic length in the x-direction in meters
-L_y = np.sqrt(hbar / (m * omeg_y))                                                                                      # Characteristic length in the y-direction in meters
-L_z = np.sqrt(hbar / (m * omeg_z))                                                                                      # Characteristic length in the z-direction in meters
-g = 2 * N * L_x * m * scale * a_s * np.sqrt(omeg_y * omeg_z) / hbar                                                     # Dimensionless interaction parameter
+L_x = np.sqrt(hbar / (m * omeg_x))                                  # Characteristic length in the x-direction in meters
+L_y = np.sqrt(hbar / (m * omeg_y))                                  # Characteristic length in the y-direction in meters
+L_z = np.sqrt(hbar / (m * omeg_z))                                  # Characteristic length in the z-direction in meters
+g = 2 * N * L_x * m * scale * a_s * np.sqrt(omeg_y * omeg_z) / hbar # Dimensionless interaction parameter
 
 # Conversion factors to plot in physical units
-L_xmum = np.sqrt(hbar / (m * omeg_x)) * 1e6                                                                             # Characteristic length in the x-direction in meters
-L_ymum = np.sqrt(hbar / (m * omeg_y)) * 1e6                                                                             # Characteristic length in the y-direction in meters
-L_zmum = np.sqrt(hbar / (m * omeg_z)) * 1e6                                                                             # Characteristic length in the z-direction in meters
-time_conv = 1. / omeg_x * 1e3                                                                                           # Converts characteristic time into milliseconds
-energy_conv = hbar * omeg_x                                                                                             # Converts dimensionless energy terms to Joules
-muK_conv = energy_conv * (1e6 / Boltzmann)                                                                              # Converts Joule terms to microKelvin
-nK_conv = energy_conv * (1e9 / Boltzmann)                                                                               # Converts Joule terms to nanoKelvin
-specvol_mum = (L_xmum * L_ymum * L_zmum) / N                                                                            # Converts dimensionless spacial terms into micrometers^3 per particle
-dens_conv = 1. / (L_xmum * L_ymum * L_zmum)                                                                             # Calculated version of density unit conversion
+L_xmum = np.sqrt(hbar / (m * omeg_x)) * 1e6     # Characteristic length in the x-direction in meters
+L_ymum = np.sqrt(hbar / (m * omeg_y)) * 1e6     # Characteristic length in the y-direction in meters
+L_zmum = np.sqrt(hbar / (m * omeg_z)) * 1e6     # Characteristic length in the z-direction in meters
+time_conv = 1. / omeg_x * 1e3                   # Converts characteristic time into milliseconds
+energy_conv = hbar * omeg_x                     # Converts dimensionless energy terms to Joules
+muK_conv = energy_conv * (1e6 / Boltzmann)      # Converts Joule terms to microKelvin
+nK_conv = energy_conv * (1e9 / Boltzmann)       # Converts Joule terms to nanoKelvin
+specvol_mum = (L_xmum * L_ymum * L_zmum) / N    # Converts dimensionless spacial terms into micrometers^3 per particle
+dens_conv = 1. / (L_xmum * L_ymum * L_zmum)     # Calculated version of density unit conversion
 
 # Parameters for computation
 propagation_dt = 1e-4
-height_asymmetric = 35.                                                                                                 # Height parameter of asymmetric barrier
-delta = 5.                                                                                                              # Sharpness parameter of asymmetric barrier
-v_0 = 45.5                                                                                                              # Coefficient for the trapping potential
-offset = 20.                                                                                                            # width offset for gaussian potentials
+height_asymmetric = 35.                         # Height parameter of asymmetric barrier
+delta = 5.                                      # Sharpness parameter of asymmetric barrier
+v_0 = 45.5                                      # Coefficient for the trapping potential
+offset = 20.                                    # width offset for gaussian potentials
 
 # Functions for computation
 @njit
@@ -195,7 +195,8 @@ def run_single_case(params):
         # bundle separately Schrodinger data
         'schrodinger': {
             'wavefunctions': schrodinger_wavefunctions,
-            'extent': [schrodinger_propagator.x.min(), schrodinger_propagator.x.max(), 0., max(schrodinger_propagator.times)],
+            'extent': [schrodinger_propagator.x.min(), schrodinger_propagator.x.max(),
+                       0., max(schrodinger_propagator.times)],
             'times': schrodinger_propagator.times,
 
             'x_average': schrodinger_propagator.x_average,
@@ -215,35 +216,37 @@ def run_single_case(params):
 
 if __name__ == '__main__':
 
-    fignum = 1                                                                                                          # Declare starting figure number
-    T = .5 * 2. * 2. * np.pi                                                                                            # Time duration for two periods
+    fignum = 1                                                  # Declare starting figure number
+    T = .5 * 2. * 2. * np.pi                                    # Time duration for two periods
     times = np.linspace(0, T, 500)
-    t_msplot = times * time_conv                                                                                        # Declare time with units of ms for plotting
+    t_msplot = times * time_conv                                # Declare time with units of ms for plotting
 
     # save parameters as a separate bundle
     sys_params_right = dict(
-        x_amplitude = 80.,                                                                                              # Set the range for calculation
-        x_grid_dim = 8 * 1024,                                                                                          # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
+        x_amplitude = 80.,                                      # Set the range for calculation
+        # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
+        x_grid_dim = 8 * 1024,
         N = N,
         k = k,
-        init_momentum_kick = 1.,
+        init_momentum_kick = 1.5,
         initial_trap = initial_trap,
         diff_v = diff_v,
         diff_k = diff_k,
         times = times,
     )
-
-    sys_params_left = sys_params_right.copy()                                                                           #copy to create parameters for the flipped case
-
-    sys_params_left['init_momentum_kick'] = -sys_params_left['init_momentum_kick']                                      #This is used to flip the kick of the momentum about the offset
+    #copy to create parameters for the flipped case
+    sys_params_left = sys_params_right.copy()
+    #This is used to flip the kick of the momentum about the offset
+    sys_params_left['init_momentum_kick'] = -sys_params_left['init_momentum_kick']
 
     ####################################################################################################################
     # Run calculations in parallel
     ####################################################################################################################
 
     # Get the unflip and flip simulations run in parallel;
+    # Results will be saved in qsys and qsys_flipped, respectively
     with Pool() as pool:
-        qsys_right, qsys_left = pool.map(run_single_case, [sys_params_right, sys_params_left])                          # Results will be saved in qsys and qsys_flipped, respectively
+        qsys_right, qsys_left = pool.map(run_single_case, [sys_params_right, sys_params_left])
 
     ####################################################################################################################
     # Plot the potential in physical units before proceeding with simulation
@@ -251,8 +254,9 @@ if __name__ == '__main__':
 
     dx = qsys_right['gpe']['dx']
     size = qsys_right['gpe']['x'].size
-    x_cut_right = int(0.58 * size)                                                                                             #These are cuts such that we observe the behavior about the initial location of the wave
-    x_cut_left = int(0.42 * size)
+    #These are cuts such that we observe the behavior about the initial location of the wave
+    x_cut_right = int(0.525 * size)
+    x_cut_left = int(0.425 * size)
 
     @njit
     def v_muKelvin(v):
@@ -379,10 +383,10 @@ if __name__ == '__main__':
     # Calculate and plot the transmission probability
     ####################################################################################################################
 
-    figTPL = plt.figure(fignum,figsize=(25,6))
+    figTPL = plt.figure(fignum,figsize=(25,12))
     fignum += 1
-    plt.title("Probability of particle on the Left")
-    plt.subplot(131)
+    plt.subplot(231)
+    plt.title('Probability of Schrödinger on the Left')
     plt.plot(
         t_msplot,
         np.sum(np.abs(qsys_right['schrodinger']['wavefunctions'])[:, x_cut_right:] ** 2, axis=1) * dx,
@@ -390,14 +394,15 @@ if __name__ == '__main__':
     )
     plt.plot(
         t_msplot,
-        1 - np.sum(np.abs(qsys_left['schrodinger']['wavefunctions'])[:, x_cut_right:] ** 2, axis=1) * dx,
+        np.sum(np.abs(qsys_left['schrodinger']['wavefunctions'])[:, x_cut_right:] ** 2, axis=1) * dx,
         label='Schrodinger kicked to the left'
     )
     plt.legend()
     plt.xlabel('time $t$ (ms)')
     plt.ylabel("transmission probability")
 
-    plt.subplot(132)
+    plt.subplot(232)
+    plt.title('Probability of GPE on the Left')
     plt.plot(
         t_msplot,
         np.sum(np.abs(qsys_right['gpe']['wavefunctions'])[:, x_cut_right:] ** 2, axis=1) * dx,
@@ -405,14 +410,15 @@ if __name__ == '__main__':
     )
     plt.plot(
         t_msplot,
-        1 - np.sum(np.abs(qsys_left['gpe']['wavefunctions'])[:, x_cut_right:] ** 2, axis=1) * dx,
+        np.sum(np.abs(qsys_left['gpe']['wavefunctions'])[:, x_cut_right:] ** 2, axis=1) * dx,
         label='GPE kicked to the left'
     )
     plt.legend()
     plt.xlabel('time $t$ (ms)')
     plt.ylabel("transmission probability")
 
-    plt.subplot(133)
+    plt.subplot(233)
+    plt.title('Probability region')
     plt.plot(x_mum, v_muK)
     plt.fill_between(
         x_mum[x_cut_right:],
@@ -425,42 +431,40 @@ if __name__ == '__main__':
     plt.xlabel('$x$ ($\mu$m) ')
     plt.ylabel('$V(x)$ ($\mu$K) Region')
     plt.xlim([-80 * L_xmum, 80 * L_xmum])
-    plt.savefig('Transmission Probability Right' + '.png')
-
-    figTPR = plt.figure(fignum,figsize=(25,6))
-    fignum += 1
-    plt.title("Probability of particle on the Right")
-    plt.subplot(131)
+    plt.subplot(234)
+    plt.title('Probability of Schrödinger on the Right')
     plt.plot(
         t_msplot,
-        np.sum(np.abs(qsys_right['schrodinger']['wavefunctions'])[:, x_cut_left:] ** 2, axis=1) * dx,
+        np.sum(np.abs(qsys_right['schrodinger']['wavefunctions'])[:, :x_cut_left] ** 2, axis=1) * dx,
         label='Schrodinger kicked to the right'
     )
     plt.plot(
         t_msplot,
-        np.sum(np.abs(qsys_left['schrodinger']['wavefunctions'])[:, x_cut_left:] ** 2, axis=1) * dx,
+        np.sum(np.abs(qsys_left['schrodinger']['wavefunctions'])[:, :x_cut_left] ** 2, axis=1) * dx,
         label='Schrodinger kicked to the left'
     )
     plt.legend()
     plt.xlabel('time $t$ (ms)')
     plt.ylabel("transmission probability")
 
-    plt.subplot(132)
+    plt.subplot(235)
+    plt.title('Probability of GPE on the Left')
     plt.plot(
         t_msplot,
-        np.sum(np.abs(qsys_right['gpe']['wavefunctions'])[:, x_cut_left:] ** 2, axis=1) * dx,
+        np.sum(np.abs(qsys_right['gpe']['wavefunctions'])[:, :x_cut_left] ** 2, axis=1) * dx,
         label='GPE kicked to the right'
     )
     plt.plot(
         t_msplot,
-        np.sum(np.abs(qsys_left['gpe']['wavefunctions'])[:, x_cut_left:] ** 2, axis=1) * dx,
+        np.sum(np.abs(qsys_left['gpe']['wavefunctions'])[:, :x_cut_left] ** 2, axis=1) * dx,
         label='GPE kicked to the left'
     )
     plt.legend()
     plt.xlabel('time $t$ (ms)')
     plt.ylabel("transmission probability")
 
-    plt.subplot(133)
+    plt.subplot(236)
+    plt.title('Probability region')
     plt.plot(x_mum, v_muK)
     plt.fill_between(
         x_mum[:x_cut_left],
@@ -473,11 +477,12 @@ if __name__ == '__main__':
     plt.xlabel('$x$ ($\mu$m) ')
     plt.ylabel('$V(x)$ ($\mu$K) Region')
     plt.xlim([-80 * L_xmum, 80 * L_xmum])
-    plt.savefig('Transmission Probability Left' + '.png')
+    plt.savefig('Transmission Probability' + '.png')
 
-    End_time = datetime.datetime.now(pytz.timezone('US/Central'))                                                       # Get current time to finish timing of program
-
-    print ("Start time: {}:{}:{}".format(Start_time.hour,Start_time.minute,Start_time.second))                          # Print times for review
+    # Get current time to finish timing of program
+    End_time = datetime.datetime.now(pytz.timezone('US/Central'))
+    # Print times for review
+    print ("Start time: {}:{}:{}".format(Start_time.hour,Start_time.minute,Start_time.second))
     print ("End time: {}:{}:{}".format(End_time.hour, End_time.minute, End_time.second))
 
-    plt.show()                                                                                                          #generate all plots
+    plt.show()      #generate all plots

@@ -35,7 +35,8 @@ omeg_cooling = 450 * 2 * np.pi                                                  
 scale = 1                                                                                                               # Scaling factor for the interaction parameter
 
 # Parameters calculated by Python
-L_x = np.sqrt(hbar / (m * omeg_x))                                                                                      # Characteristic length in the x-direction in meters
+# L_x = np.sqrt(hbar / (m * omeg_x))                                                                                      # Characteristic length in the x-direction in meters
+L_x = 1.52295528474e-06                 # Value for testing against Patrick's data
 L_y = np.sqrt(hbar / (m * omeg_y))                                                                                      # Characteristic length in the y-direction in meters
 L_z = np.sqrt(hbar / (m * omeg_z))                                                                                      # Characteristic length in the z-direction in meters
 g = 2 * N * L_x * m * scale * a_s * np.sqrt(omeg_y * omeg_z) / hbar                                                     # Dimensionless interaction parameter
@@ -55,7 +56,8 @@ dens_conv = 1. / (L_xmum * L_ymum * L_zmum)                                     
 propagation_dt = 1e-4
 height_asymmetric = 35                                                                                                  # Height parameter of asymmetric barrier
 delta = 5                                                                                                               # Sharpness parameter of asymmetric barrier
-v_0 = 45.5                                                                                                              # Coefficient for the trapping potential
+# v_0 = 45.5                                                                                                              # Coefficient for the trapping potential
+v_0 = 12.5                              #For testing Patrick's data
 offset = 20.                                                                                                            # Center offset for cooling potential
 
 # Functions for computation
@@ -210,14 +212,16 @@ def run_single_case(params):
 if __name__ == '__main__':
 
     fignum = 1                                                                                                          # Declare starting figure number
-    T = .5 * 2. * 2. * np.pi                                                                                            # Time duration for two periods
-    times = np.linspace(0, T, 500)
+    # T = .5 * 2. * 2. * np.pi                                                                                            # Time duration for two periods
+    T = 15.                             # For Testing Patrick's Data
+    # times = np.linspace(0, T, 500)
+    times = np.linspace(0, T, 1502)     # For testing Patrick's Data
     t_msplot = times * time_conv                                                                                        # Declare time with units of ms for plotting
 
     # save parameters as a separate bundle
     sys_params = dict(
         x_amplitude = 80.,                                                                                              # Set the range for calculation
-        x_grid_dim = 1 * 1024,                                                                                         # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
+        x_grid_dim = 32 * 1024,                                                                                          # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
         N = N,
         k = k,
         initial_trap = initial_trap,

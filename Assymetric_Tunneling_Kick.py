@@ -96,7 +96,9 @@ def initial_trap(x, t=0):
     :param x:
     :return:
     """
-    return v_0 * x ** 2
+    # return v_0 * x ** 2
+    return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+
 
 ########################################################################################################################
 # Declare parallel functions
@@ -386,7 +388,7 @@ if __name__ == '__main__':
     figTPL = plt.figure(fignum,figsize=(25,12))
     fignum += 1
     plt.subplot(231)
-    plt.title('Probability of Schrödinger on the Left')
+    plt.title('Probability of Schrödinger on the Right')
     plt.plot(
         t_msplot,
         np.sum(np.abs(qsys_right['schrodinger']['wavefunctions'])[:, x_cut_right:] ** 2, axis=1) * dx,
@@ -402,7 +404,7 @@ if __name__ == '__main__':
     plt.ylabel("transmission probability")
 
     plt.subplot(232)
-    plt.title('Probability of GPE on the Left')
+    plt.title('Probability of GPE on the Right')
     plt.plot(
         t_msplot,
         np.sum(np.abs(qsys_right['gpe']['wavefunctions'])[:, x_cut_right:] ** 2, axis=1) * dx,
@@ -432,7 +434,7 @@ if __name__ == '__main__':
     plt.ylabel('$V(x)$ ($\mu$K) Region')
     plt.xlim([-80 * L_xmum, 80 * L_xmum])
     plt.subplot(234)
-    plt.title('Probability of Schrödinger on the Right')
+    plt.title('Probability of Schrödinger on the left')
     plt.plot(
         t_msplot,
         np.sum(np.abs(qsys_right['schrodinger']['wavefunctions'])[:, :x_cut_left] ** 2, axis=1) * dx,

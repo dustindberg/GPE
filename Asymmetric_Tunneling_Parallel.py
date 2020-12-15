@@ -6,8 +6,11 @@ from scipy.constants import hbar, Boltzmann
 from scipy.interpolate import UnivariateSpline
 from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D                                                                # class for the split operator propagation
 import datetime
+from datetime import date
 import pytz
+import pickle
 from multiprocessing import Pool
+
 
 Start_time = datetime.datetime.now(pytz.timezone('US/Central'))                                                         # Start timing for optimizing runs
 
@@ -57,8 +60,11 @@ propagation_dt = 1e-4
 height_asymmetric = 35                                                                                                  # Height parameter of asymmetric barrier
 delta = 5                                                                                                               # Sharpness parameter of asymmetric barrier
 # v_0 = 45.5                                                                                                              # Coefficient for the trapping potential
-v_0 = 12.5                              #For testing Patrick's data
+v_0 = 12.5                              # For testing Patrick's data
 offset = 20.                                                                                                            # Center offset for cooling potential
+
+today = date.today()                    # tag the date for unique file naming
+filename = str(today.year) + str(today.month) + str(today.day) + "_" + str(Start_time.hour) + str(Start_time.minute)
 
 # Functions for computation
 @njit
@@ -240,7 +246,14 @@ if __name__ == '__main__':
 
     # Get the unflip and flip simulations run in parallel;
     with Pool() as pool:
-        qsys, qsys_flipped = pool.map(run_single_case, [sys_params, sys_params_flipped])                                # Results will be saved in qsys and qsys_flipped, respectively
+        qsys, qsys_flipped = pool.map(run_single_case, [sys_params, sys_params_flipped])
+        # Results will be saved in qsys and qsys_flipped, respectively
+
+    with open(filename + ".pickle", "wb") as f:
+        pickle.dump([qsys, qsys_flipped], f)
+
+    with open(filename + ".pickle", "rb") as f:
+        qsys, qsys_flipped = pickle.load(f)
 
     ####################################################################################################################
     # Plot the potential in physical units before proceeding with simulation

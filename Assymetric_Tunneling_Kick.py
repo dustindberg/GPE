@@ -210,6 +210,9 @@ def run_single_case(params):
 
             'time_increments': schrodinger_propagator.time_increments,
         },
+
+        # collect parameters for export
+        'parameters': params
     }
 
 ########################################################################################################################
@@ -230,7 +233,7 @@ if __name__ == '__main__':
         x_grid_dim = 8 * 1024,
         N = N,
         k = k,
-        init_momentum_kick = 1.5,
+        init_momentum_kick = 30.,
         initial_trap = initial_trap,
         diff_v = diff_v,
         diff_k = diff_k,

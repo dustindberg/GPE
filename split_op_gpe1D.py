@@ -54,7 +54,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
     try:
         with open(fftw_wisdom_fname, 'rb') as fftw_wisdow:
             pyfftw.import_wisdom(pickle.load(fftw_wisdow))
-    except FileNotFoundError:
+    except (FileNotFoundError, EOFError):
         pass
 
     # allocate the array for wave function
@@ -265,7 +265,7 @@ class SplitOpGPE1D(object):
         try:
             with open(fftw_wisdom_fname, 'rb') as fftw_wisdow:
                 pyfftw.import_wisdom(pickle.load(fftw_wisdow))
-        except FileNotFoundError:
+        except (FileNotFoundError, EOFError):
             pass
 
         # allocate the array for wave function

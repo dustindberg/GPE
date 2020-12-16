@@ -120,7 +120,7 @@ def run_single_case(params):
     init_state, mu = imag_time_gpe1D(
         v=params['initial_trap'],
         g=g,
-        dt=5e-5,
+        dt=1e-3,
         epsilon=1e-9,
         **params
     )
@@ -129,8 +129,8 @@ def run_single_case(params):
         v=params['initial_trap'],
         g=g,
         init_wavefunction=init_state,
-        dt=1e-6,
-        epsilon=1e-11,
+        dt=1e-4,
+        epsilon=1e-10,
         **params
     )
 
@@ -218,7 +218,7 @@ def run_single_case(params):
 if __name__ == '__main__':
 
     fignum = 1                                                                                                          # Declare starting figure number
-    # T = .5 * 2. * 2. * np.pi                                                                                            # Time duration for two periods
+    # T = .5 * 2. * 2. * np.pi                                                                                          # Time duration for two periods
     T = 15.                             # For Testing Patrick's Data
     # times = np.linspace(0, T, 500)
     times = np.linspace(0, T, 1502)     # For testing Patrick's Data
@@ -318,6 +318,10 @@ if __name__ == '__main__':
         plt.colorbar()
         plt.savefig(title + '.png')
 
+        #save the density for further testing
+        density = np.abs(qsys['wavefunctions']) ** 2
+        np.save('Density_' + title, density)
+
         # Plot tests of the Ehrenfest theorems
         figefr = plt.figure(fignum, figsize=(24,6))
         fignum += 1
@@ -328,7 +332,7 @@ if __name__ == '__main__':
         # Calculate the derivative using the spline interpolation because times is not a linearly spaced array
         plt.plot(t_ms, UnivariateSpline(times, qsys['x_average'], s=0).derivative()(times),
                  '-r', label='$d\\langle\\hat{x}\\rangle / dt$')
-        plt.plot(times, qsys['x_average_rhs'], '--b',label='$\\langle\\hat{p}\\rangle$')
+        plt.plot(t_ms, qsys['x_average_rhs'], '--b',label='$\\langle\\hat{p}\\rangle$')
         plt.legend()
         plt.ylabel('momentum')
         plt.xlabel('time $t$ (a.u.)')
@@ -336,9 +340,9 @@ if __name__ == '__main__':
         plt.subplot(142)
         plt.title("Verify the second Ehrenfest theorem", pad = 15)
         # Calculate the derivative using the spline interpolation because times is not a linearly spaced array
-        plt.plot(times, UnivariateSpline(times, qsys['p_average'], s=0).derivative()(times),
+        plt.plot(t_ms, UnivariateSpline(times, qsys['p_average'], s=0).derivative()(times),
                  '-r', label='$d\\langle\\hat{p}\\rangle / dt$')
-        plt.plot(times, qsys['p_average_rhs'], '--b', label='$\\langle -U\'(\\hat{x})\\rangle$')
+        plt.plot(t_ms, qsys['p_average_rhs'], '--b', label='$\\langle -U\'(\\hat{x})\\rangle$')
         plt.legend()
         plt.ylabel('force')
         plt.xlabel('time $t$ (a.u.)')

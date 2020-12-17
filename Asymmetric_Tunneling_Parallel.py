@@ -38,8 +38,7 @@ omeg_cooling = 450 * 2 * np.pi                                                  
 scale = 1                                                                                                               # Scaling factor for the interaction parameter
 
 # Parameters calculated by Python
-# L_x = np.sqrt(hbar / (m * omeg_x))                                                                                      # Characteristic length in the x-direction in meters
-L_x = 1.52295528474e-06                 # Value for testing against Patrick's data
+L_x = np.sqrt(hbar / (m * omeg_x))                                                                                      # Characteristic length in the x-direction in meters
 L_y = np.sqrt(hbar / (m * omeg_y))                                                                                      # Characteristic length in the y-direction in meters
 L_z = np.sqrt(hbar / (m * omeg_z))                                                                                      # Characteristic length in the z-direction in meters
 g = 2 * N * L_x * m * scale * a_s * np.sqrt(omeg_y * omeg_z) / hbar                                                     # Dimensionless interaction parameter
@@ -59,8 +58,7 @@ dens_conv = 1. / (L_xmum * L_ymum * L_zmum)                                     
 propagation_dt = 1e-4
 height_asymmetric = 35                                                                                                  # Height parameter of asymmetric barrier
 delta = 5                                                                                                               # Sharpness parameter of asymmetric barrier
-# v_0 = 45.5                                                                                                              # Coefficient for the trapping potential
-v_0 = 12.5                              # For testing Patrick's data
+v_0 = 45.5                                                                                                              # Coefficient for the trapping potential
 offset = 20.                                                                                                            # Center offset for cooling potential
 
 today = date.today()                    # tag the date for unique file naming
@@ -218,10 +216,8 @@ def run_single_case(params):
 if __name__ == '__main__':
 
     fignum = 1                                                                                                          # Declare starting figure number
-    # T = .5 * 2. * 2. * np.pi                                                                                          # Time duration for two periods
-    T = 15.                             # For Testing Patrick's Data
-    # times = np.linspace(0, T, 500)
-    times = np.linspace(0, T, 1502)     # For testing Patrick's Data
+    T = .5 * 2. * 2. * np.pi                                                                                            # Time length of two periods
+    times = np.linspace(0, T, 500)
     t_msplot = times * time_conv                                                                                        # Declare time with units of ms for plotting
 
     # save parameters as a separate bundle
@@ -282,7 +278,7 @@ if __name__ == '__main__':
 
     plt.xlabel('$x$ ($\mu$m) ')
     plt.ylabel('$V(x)$ ($\mu$K)')
-    plt.xlim([-80 * L_xmum, 80 * L_xmum])
+    plt.xlim([-sys_params['x_amplitude'] * L_xmum, sys_params['x_amplitude'] * L_xmum])
     plt.savefig('Potential' + '.png')
 
     ####################################################################################################################
@@ -332,7 +328,7 @@ if __name__ == '__main__':
         # Calculate the derivative using the spline interpolation because times is not a linearly spaced array
         plt.plot(t_ms, UnivariateSpline(times, qsys['x_average'], s=0).derivative()(times),
                  '-r', label='$d\\langle\\hat{x}\\rangle / dt$')
-        plt.plot(t_ms, qsys['x_average_rhs'], '--b',label='$\\langle\\hat{p}\\rangle$')
+        plt.plot(t_ms, qsys['x_average_rhs'], '--b', label='$\\langle\\hat{p}\\rangle$')
         plt.legend()
         plt.ylabel('momentum')
         plt.xlabel('time $t$ (a.u.)')

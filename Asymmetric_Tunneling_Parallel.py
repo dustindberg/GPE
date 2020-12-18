@@ -10,6 +10,7 @@ from datetime import date
 import pytz
 import pickle
 from multiprocessing import Pool
+import os
 
 
 Start_time = datetime.datetime.now(pytz.timezone('US/Central'))                                                         # Start timing for optimizing runs
@@ -61,8 +62,17 @@ delta = 5                                                                       
 v_0 = 45.5                                                                                                              # Coefficient for the trapping potential
 offset = 20.                                                                                                            # Center offset for cooling potential
 
-today = date.today()                    # tag the date for unique file naming
+# Create a tag using date and time to save and archive data
+today = date.today()
 filename = str(today.year) + str(today.month) + str(today.day) + "_" + str(Start_time.hour) + str(Start_time.minute)
+savesfolder = filename
+parent_dir = "/home/skref/PycharmProjects/GPE/Archive_Data"
+path = os.path.join(parent_dir, savesfolder)
+os.mkdir(path)
+savespath = 'Archive_Data/' + str(savesfolder) + '/'
+
+print("Directory '%s' created" % savesfolder)
+
 
 # Functions for computation
 @njit
@@ -71,7 +81,7 @@ def v(x, t=0.):
     Potential energy
     """
     return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
-    #return 3000 - 2800 * np.exp(-((x + offset)/ 45) ** 2) - 2850 * np.exp(-((x - offset) / 47) ** 2) - 100 * np.exp(-((x - 5) / 10) ** 2)
+    # return 3000 - 2800 * np.exp(-((x + offset)/ 45) ** 2) - 2850 * np.exp(-((x - offset) / 47) ** 2) - 100 * np.exp(-((x - 5) / 10) ** 2)
 
 @njit
 def diff_v(x, t=0.):
@@ -79,7 +89,7 @@ def diff_v(x, t=0.):
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
     return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
-    #return (224 / 81) * (x + offset) * np.exp(-((x + offset)/ 45) ** 2) + (5700 / 2209) * (x - offset) * np.exp(-((x - offset) / 47) ** 2) + 2 * (x - 5) * np.exp(-((x - 5) / 10) ** 2)
+    # return (224 / 81) * (x + offset) * np.exp(-((x + offset)/ 45) ** 2) + (5700 / 2209) * (x - offset) * np.exp(-((x - offset) / 47) ** 2) + 2 * (x - 5) * np.exp(-((x - 5) / 10) ** 2)
 
 @njit
 def diff_k(p, t=0.):

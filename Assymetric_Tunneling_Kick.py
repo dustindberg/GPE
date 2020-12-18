@@ -4,27 +4,30 @@ from matplotlib.colors import Normalize, SymLogNorm
 import numpy as np
 from scipy.constants import hbar, Boltzmann
 from scipy.interpolate import UnivariateSpline
-from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D # class for the split operator propagation
+from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D  # class for the split operator propagation
 import datetime
+from datetime import date
 import pytz
+import pickle
+import os
 from multiprocessing import Pool
 
-Start_time = datetime.datetime.now(pytz.timezone('US/Central')) # Start timing for optimizing runs
+Start_time = datetime.datetime.now(pytz.timezone('US/Central'))  # Start timing for optimizing runs
 
 ########################################################################################################################
 # Define the initial parameters for interaction and potential
 ########################################################################################################################
 
 # Define physical parameters
-a_0 = 5.291772109e-11 # Bohr Radius in meters
+a_0 = 5.291772109e-11           # Bohr Radius in meters
 
 # Rubidium-87 properties
-m = 1.4431609e-25 # Calculated mass of 87Rb in kg
-a_s = 100 * a_0 # Background scattering length of 87Rb in meters
+m = 1.4431609e-25               # Calculated mass of 87Rb in kg
+a_s = 100 * a_0                 # Background scattering length of 87Rb in meters
 
 # Potassium-41 properties
-# m= 6.80187119e-26 # Calculated mass of 41K in kg
-# a_s = 65.42 * a_0 # Background scattering length of 41K in meters
+# m= 6.80187119e-26               # Calculated mass of 41K in kg
+# a_s = 65.42 * a_0               # Background scattering length of 41K in meters
 
 # Experiment parameters
 N = 1e4                         # Number of particles
@@ -38,7 +41,7 @@ scale = 1                       # Scaling factor for the interaction parameter
 L_x = np.sqrt(hbar / (m * omeg_x))                                  # Characteristic length in the x-direction in meters
 L_y = np.sqrt(hbar / (m * omeg_y))                                  # Characteristic length in the y-direction in meters
 L_z = np.sqrt(hbar / (m * omeg_z))                                  # Characteristic length in the z-direction in meters
-g = 2 * N * L_x * m * scale * a_s * np.sqrt(omeg_y * omeg_z) / hbar # Dimensionless interaction parameter
+g = 2 * N * L_x * m * scale * a_s * np.sqrt(omeg_y * omeg_z) / hbar  # Dimensionless interaction parameter
 
 # Conversion factors to plot in physical units
 L_xmum = np.sqrt(hbar / (m * omeg_x)) * 1e6     # Characteristic length in the x-direction in meters
@@ -58,22 +61,36 @@ delta = 5.                                      # Sharpness parameter of asymmet
 v_0 = 45.5                                      # Coefficient for the trapping potential
 offset = 20.                                    # width offset for gaussian potentials
 
+# Create a tag using date and time to save and archive data
+today = date.today()
+filename = 'Kick_' + str(today.year) + str(today.month) + str(today.day) + "_" + str(Start_time.hour) + str(Start_time.minute)
+savesfolder = filename
+parent_dir = "/home/skref/PycharmProjects/GPE/Archive_Data"
+path = os.path.join(parent_dir, savesfolder)
+os.mkdir(path)
+savespath = 'Archive_Data/' + str(savesfolder) + '/'
+
+print("Directory '%s' created" % savesfolder)
+
+
 # Functions for computation
 @njit
 def v(x, t=0.):
     """
     Potential energy
     """
-    return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
-    #return 3000 - 2800 * np.exp(-((x + offset)/ 45) ** 2) - 2850 * np.exp(-((x - offset) / 47) ** 2) - 100 * np.exp(-((x - 5) / 10) ** 2)
+    return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2)  # * (x < 0)
+    # return 3000 - 2800 * np.exp(-((x + offset)/ 45) ** 2) - 2850 * np.exp(-((x - offset) / 47) ** 2) - 100 * np.exp(-((x - 5) / 10) ** 2)
+
 
 @njit
 def diff_v(x, t=0.):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
-    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
-    #return (224 / 81) * (x + offset) * np.exp(-((x + offset)/ 45) ** 2) + (5700 / 2209) * (x - offset) * np.exp(-((x - offset) / 47) ** 2) + 2 * (x - 5) * np.exp(-((x - 5) / 10) ** 2)
+    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2)  # * (x < 0)
+    # return (224 / 81) * (x + offset) * np.exp(-((x + offset)/ 45) ** 2) + (5700 / 2209) * (x - offset) * np.exp(-((x - offset) / 47) ** 2) + 2 * (x - 5) * np.exp(-((x - 5) / 10) ** 2)
+
 
 @njit
 def diff_k(p, t=0.):
@@ -82,12 +99,14 @@ def diff_k(p, t=0.):
     """
     return p
 
+
 @njit
 def k(p, t=0.):
     """
     Non-relativistic kinetic energy
     """
     return 0.5 * p ** 2
+
 
 @njit
 def initial_trap(x, t=0):
@@ -96,8 +115,8 @@ def initial_trap(x, t=0):
     :param x:
     :return:
     """
-    # return v_0 * x ** 2
-    return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    return v_0 * x ** 2
+    # return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2)  # * (x < 0)
 
 
 ########################################################################################################################
@@ -219,6 +238,7 @@ def run_single_case(params):
 # Serial code to launch parallel computations
 ########################################################################################################################
 
+
 if __name__ == '__main__':
 
     fignum = 1                                                  # Declare starting figure number
@@ -228,16 +248,16 @@ if __name__ == '__main__':
 
     # save parameters as a separate bundle
     sys_params_right = dict(
-        x_amplitude = 80.,                                      # Set the range for calculation
+        x_amplitude=80.,                                      # Set the range for calculation
         # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
-        x_grid_dim = 8 * 1024,
-        N = N,
-        k = k,
-        init_momentum_kick = 30.,
-        initial_trap = initial_trap,
-        diff_v = diff_v,
-        diff_k = diff_k,
-        times = times,
+        x_grid_dim=8 * 1024,
+        N=N,
+        k=k,
+        init_momentum_kick=30.,
+        initial_trap=initial_trap,
+        diff_v=diff_v,
+        diff_k=diff_k,
+        times=times,
     )
     #copy to create parameters for the flipped case
     sys_params_left = sys_params_right.copy()
@@ -253,14 +273,20 @@ if __name__ == '__main__':
     with Pool() as pool:
         qsys_right, qsys_left = pool.map(run_single_case, [sys_params_right, sys_params_left])
 
+    with open(savespath + filename + ".pickle", "wb") as f:
+        pickle.dump([qsys_left, qsys_right], f)
+
+    with open(savespath + filename + ".pickle", "rb") as f:
+        qsys_left, qsys_right = pickle.load(f)
+
     ####################################################################################################################
-    # Plot the potential in physical units before proceeding with simulation
+    # Plot the potential in physical units
     ####################################################################################################################
 
     dx = qsys_right['gpe']['dx']
     size = qsys_right['gpe']['x'].size
     #These are cuts such that we observe the behavior about the initial location of the wave
-    x_cut_right = int(0.525 * size)
+    x_cut_right = int(0.575 * size)
     x_cut_left = int(0.425 * size)
 
     @njit
@@ -282,7 +308,7 @@ if __name__ == '__main__':
     plt.xlabel('$x$ ($\mu$m) ')
     plt.ylabel('$V(x)$ ($\mu$K)')
     plt.xlim([-80 * L_xmum, 80 * L_xmum])
-    plt.savefig('Potential' + '.png')
+    plt.savefig(savespath + 'Potential' + '.png')
 
     ####################################################################################################################
     # Generate plots to test the propagation
@@ -315,7 +341,7 @@ if __name__ == '__main__':
         plt.xlabel('Coordinate $x$ (a.u.)')
         plt.ylabel('Time $t$ (a.u.)')
         plt.colorbar()
-        plt.savefig(title + '.png')
+        plt.savefig(savespath + title + '.png')
 
         # Plot tests of the Ehrenfest theorems
         figefr = plt.figure(fignum, figsize=(24,6))
@@ -364,7 +390,7 @@ if __name__ == '__main__':
         plt.ylabel('$dt$')
         plt.xlabel('Time Step')
         figefr.suptitle(plot_title)
-        plt.savefig('EFT_' + plot_title + '.png')
+        plt.savefig(savespath + 'EFT_' + plot_title + '.png')
 
         return fignum
 
@@ -482,7 +508,7 @@ if __name__ == '__main__':
     plt.xlabel('$x$ ($\mu$m) ')
     plt.ylabel('$V(x)$ ($\mu$K) Region')
     plt.xlim([-80 * L_xmum, 80 * L_xmum])
-    plt.savefig('Transmission Probability' + '.png')
+    plt.savefig(savespath + 'Transmission Probability' + '.png')
 
     # Get current time to finish timing of program
     End_time = datetime.datetime.now(pytz.timezone('US/Central'))

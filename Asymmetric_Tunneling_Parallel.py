@@ -255,10 +255,10 @@ if __name__ == '__main__':
         qsys, qsys_flipped = pool.map(run_single_case, [sys_params, sys_params_flipped])
         # Results will be saved in qsys and qsys_flipped, respectively
 
-    with open(filename + ".pickle", "wb") as f:
+    with open(savespath + filename + ".pickle", "wb") as f:
         pickle.dump([qsys, qsys_flipped], f)
 
-    with open(filename + ".pickle", "rb") as f:
+    with open(savespath + filename + ".pickle", "rb") as f:
         qsys, qsys_flipped = pickle.load(f)
 
     ####################################################################################################################
@@ -289,7 +289,7 @@ if __name__ == '__main__':
     plt.xlabel('$x$ ($\mu$m) ')
     plt.ylabel('$V(x)$ ($\mu$K)')
     plt.xlim([-sys_params['x_amplitude'] * L_xmum, sys_params['x_amplitude'] * L_xmum])
-    plt.savefig('Potential' + '.png')
+    plt.savefig(savespath + 'Potential' + '.png')
 
     ####################################################################################################################
     # Generate plots to test the propagation
@@ -322,7 +322,7 @@ if __name__ == '__main__':
         plt.xlabel('Coordinate $x$ (a.u.)')
         plt.ylabel('Time $t$ (a.u.)')
         plt.colorbar()
-        plt.savefig(title + '.png')
+        plt.savefig(savespath + title + '.png')
 
         #save the density for further testing
         density = np.abs(qsys['wavefunctions']) ** 2
@@ -375,7 +375,7 @@ if __name__ == '__main__':
         plt.ylabel('$dt$')
         plt.xlabel('Time Step')
         figefr.suptitle(plot_title)
-        plt.savefig('EFT_' + plot_title + '.png')
+        plt.savefig(savespath + 'EFT_' + plot_title + '.png')
 
         return fignum
 
@@ -430,7 +430,7 @@ if __name__ == '__main__':
     plt.legend()
     plt.xlabel('Time $t$ (ms)')
     plt.ylabel("Transmission Probability")
-    plt.savefig('Transmission Probability' + '.png')
+    plt.savefig(savespath + 'Transmission Probability' + '.png')
 
     End_time = datetime.datetime.now(pytz.timezone('US/Central'))                                                       # Get current time to finish timing of program
 

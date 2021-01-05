@@ -224,7 +224,7 @@ class SplitOpGPE1D(object):
 
     """
     def __init__(self, *, x_grid_dim, x_amplitude, v, k, dt, g,
-                 epsilon=1e-2, diff_k=None, diff_v=None, t=0, abs_boundary,
+                 epsilon=1e-2, diff_k=None, diff_v=None, t=0, abs_boundary=1.,
                  fftw_wisdom_fname='fftw.wisdom', **kwargs):
         """
         :param x_grid_dim: the grid size

@@ -80,7 +80,7 @@ def v(x, t=0.):
     """
     Potential energy
     """
-    return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2)  # * (x < 0)
+    return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     # return 3000 - 2800 * np.exp(-((x + offset)/ 45) ** 2) - 2850 * np.exp(-((x - offset) / 47) ** 2) - 100 * np.exp(-((x - 5) / 10) ** 2)
 
 
@@ -89,7 +89,7 @@ def diff_v(x, t=0.):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
-    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2)  # * (x < 0)
+    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
     # return (224 / 81) * (x + offset) * np.exp(-((x + offset)/ 45) ** 2) + (5700 / 2209) * (x - offset) * np.exp(-((x - offset) / 47) ** 2) + 2 * (x - 5) * np.exp(-((x - 5) / 10) ** 2)
 
 
@@ -119,12 +119,6 @@ def initial_trap(x, t=0):
     return v_0 * x ** 2
     # return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2)  # * (x < 0)
 
-@njit
-def abs_boundary(x):
-    """
-    Absorbing boundary similar to the Blackman filter
-    """
-    return np.sin(0.5 * np.pi * (x + 80.) / 80.) ** (0.05 * propagation_dt)
 
 ########################################################################################################################
 # Declare parallel functions
@@ -252,10 +246,18 @@ if __name__ == '__main__':
     T = 6. * np.pi                                              # Time duration for 6 periods
     times = np.linspace(0, T, 500)
     t_msplot = times * time_conv                                # Declare time with units of ms for plotting
+    x_amplitude=80.
+
+    @njit
+    def abs_boundary(x):
+        """
+        Absorbing boundary similar to the Blackman filter
+        """
+        return np.sin(0.5 * np.pi * (x + x_amplitude) / x_amplitude) ** (0.05 * 1e-2)
 
     # save parameters as a separate bundle
     sys_params_right = dict(
-        x_amplitude=80.,                                      # Set the range for calculation
+        x_amplitude=x_amplitude,
         # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
         x_grid_dim=8 * 1024,
         N=N,

@@ -16,7 +16,6 @@ os.environ['NUMEXPR_NUM_THREADS']='{}'.format(threads)
 os.environ['OMP_NUM_THREADS'] = '{}'.format(threads)
 os.environ['MKL_NUM_THREADS'] = '{}'.format(threads)
 
-#Potentially try reducing cpu count
 
 def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=None, epsilon=1e-7,
                     abs_boundary=1., fftw_wisdom_fname='fftw.wisdom', **kwargs):
@@ -225,7 +224,7 @@ class SplitOpGPE1D(object):
 
     """
     def __init__(self, *, x_grid_dim, x_amplitude, v, k, dt, g,
-                 epsilon=1e-2, diff_k=None, diff_v=None, t=0, abs_boundary=1.,
+                 epsilon=1e-2, diff_k=None, diff_v=None, t=0, abs_boundary,
                  fftw_wisdom_fname='fftw.wisdom', **kwargs):
         """
         :param x_grid_dim: the grid size

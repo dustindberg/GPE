@@ -56,6 +56,7 @@ dens_conv = 1. / (L_xmum * L_ymum * L_zmum)     # Calculated version of density 
 
 # Parameters for computation
 propagation_dt = 1e-4
+
 height_asymmetric = 35.                         # Height parameter of asymmetric barrier
 delta = 5.                                      # Sharpness parameter of asymmetric barrier
 v_0 = 45.5                                      # Coefficient for the trapping potential
@@ -118,6 +119,12 @@ def initial_trap(x, t=0):
     return v_0 * x ** 2
     # return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2)  # * (x < 0)
 
+@njit
+def abs_boundary(x):
+    """
+    Absorbing boundary similar to the Blackman filter
+    """
+    return np.sin(0.5 * np.pi * (x + 80.) / 80.) ** (0.05 * propagation_dt)
 
 ########################################################################################################################
 # Declare parallel functions
@@ -242,7 +249,7 @@ def run_single_case(params):
 if __name__ == '__main__':
 
     fignum = 1                                                  # Declare starting figure number
-    T = .5 * 2. * 2. * np.pi                                    # Time duration for two periods
+    T = 6. * np.pi                                              # Time duration for 6 periods
     times = np.linspace(0, T, 500)
     t_msplot = times * time_conv                                # Declare time with units of ms for plotting
 
@@ -253,11 +260,12 @@ if __name__ == '__main__':
         x_grid_dim=8 * 1024,
         N=N,
         k=k,
-        init_momentum_kick=30.,
+        init_momentum_kick=22.,
         initial_trap=initial_trap,
         diff_v=diff_v,
         diff_k=diff_k,
         times=times,
+        abs_boundary=abs_boundary
     )
     #copy to create parameters for the flipped case
     sys_params_left = sys_params_right.copy()

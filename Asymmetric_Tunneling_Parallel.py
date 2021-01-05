@@ -130,6 +130,7 @@ def run_single_case(params):
         g=g,
         dt=1e-3,
         epsilon=1e-9,
+
         **params
     )
 
@@ -232,14 +233,15 @@ if __name__ == '__main__':
 
     # save parameters as a separate bundle
     sys_params = dict(
-        x_amplitude = 80.,                                                                                              # Set the range for calculation
-        x_grid_dim = 32 * 1024,                                                                                          # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
-        N = N,
-        k = k,
-        initial_trap = initial_trap,
-        diff_v = diff_v,
-        diff_k = diff_k,
-        times = times,
+        x_amplitude=80.,                                                                                              # Set the range for calculation
+        x_grid_dim=8 * 1024,                                                                                          # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
+        N=N,
+        k=k,
+        initial_trap=initial_trap,
+        diff_v=diff_v,
+        diff_k=diff_k,
+        times=times,
+        abs_boundary=1.,
     )
 
     sys_params_flipped = sys_params.copy()                                                                              #copy to create parameters for the flipped case

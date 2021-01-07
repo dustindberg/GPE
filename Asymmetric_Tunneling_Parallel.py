@@ -57,10 +57,11 @@ dens_conv = 1. / (L_xmum * L_ymum * L_zmum)                                     
 
 # Parameters for computation
 propagation_dt = 1e-4
-height_asymmetric = 35                                                                                                  # Height parameter of asymmetric barrier
-delta = 5                                                                                                               # Sharpness parameter of asymmetric barrier
+height_asymmetric = 30.                                                                                                 # Height parameter of asymmetric barrier
+delta = 9.                                                                                                              # Sharpness parameter of asymmetric barrier
 v_0 = 45.5                                                                                                              # Coefficient for the trapping potential
-offset = 20.                                                                                                            # Center offset for cooling potential
+peak_offset = 5.
+cooling_offset = 50.                                                                                                    # Center offset for cooling potential
 
 # Create a tag using date and time to save and archive data
 today = date.today()
@@ -80,16 +81,28 @@ def v(x, t=0.):
     """
     Potential energy
     """
-    return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
-    # return 3000 - 2800 * np.exp(-((x + offset)/ 45) ** 2) - 2850 * np.exp(-((x - offset) / 47) ** 2) - 100 * np.exp(-((x - 5) / 10) ** 2)
+    return height_asymmetric * (
+        np.exp(-((x + 3 * peak_offset) / delta) ** 2)
+        + (2 / 3) * np.exp(-((x + peak_offset) / delta) ** 2)
+        + 0.5 * np.exp(-((x - peak_offset) / delta) ** 2)
+        + 0.5 * np.exp(-((x - 3 * peak_offset) / delta) ** 2)
+        )
+    # return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+
 
 @njit
 def diff_v(x, t=0.):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
-    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
-    # return (224 / 81) * (x + offset) * np.exp(-((x + offset)/ 45) ** 2) + (5700 / 2209) * (x - offset) * np.exp(-((x - offset) / 47) ** 2) + 2 * (x - 5) * np.exp(-((x - 5) / 10) ** 2)
+    return (-2 * height_asymmetric / delta ** 2) * (
+            (x + 3 * peak_offset) * np.exp(-((x + 3 * peak_offset) / delta) ** 2)
+            + (x + peak_offset) * (2 / 3) * np.exp(-((x + peak_offset) / delta) ** 2)
+            + (x - peak_offset) * 0.5 * np.exp(-((x - peak_offset) / delta) ** 2)
+            + (x - 3 * peak_offset) * 0.5 * np.exp(-((x - 3 * peak_offset) / delta) ** 2)
+        )
+    # return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+
 
 @njit
 def diff_k(p, t=0.):
@@ -112,7 +125,7 @@ def initial_trap(x, t=0):
     :param x:
     :return:
     """
-    return v_0 * (x + offset) ** 2
+    return v_0 * (x + cooling_offset) ** 2
 
 ########################################################################################################################
 # Declare parallel functions
@@ -226,22 +239,33 @@ def run_single_case(params):
 
 if __name__ == '__main__':
 
-    fignum = 1                                                                                                          # Declare starting figure number
-    T = .5 * 2. * 2. * np.pi                                                                                            # Time length of two periods
+    # Declare final parameters for dictionary
+    # T = .5 * 2. * 2. * np.pi                                                                                          # Time length of two periods
+    T = np.pi                                                                                                           # Time length of 1 period
     times = np.linspace(0, T, 500)
-    t_msplot = times * time_conv                                                                                        # Declare time with units of ms for plotting
+    x_amplitude = 150.                                                                                                  # Set the range for calculation
+    x_grid_dim = 2 * 1024,                                                                                              # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
+
+
+    @njit
+    def abs_boundary(x):
+        """
+        Absorbing boundary similar to the Blackman filter
+        """
+        return np.sin(0.5 * np.pi * (x + x_amplitude) / x_amplitude) ** (0.05 * 1e-2)
+
 
     # save parameters as a separate bundle
     sys_params = dict(
-        x_amplitude=80.,                                                                                              # Set the range for calculation
-        x_grid_dim=8 * 1024,                                                                                          # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
+        x_amplitude=150.,
+        x_grid_dim=2 * 1024,
         N=N,
         k=k,
         initial_trap=initial_trap,
         diff_v=diff_v,
         diff_k=diff_k,
         times=times,
-        abs_boundary=1.,
+        abs_boundary=abs_boundary,
     )
 
     sys_params_flipped = sys_params.copy()                                                                              #copy to create parameters for the flipped case
@@ -267,10 +291,13 @@ if __name__ == '__main__':
     # Plot the potential in physical units before proceeding with simulation
     ####################################################################################################################
 
+    # Declare plotting specific terms
+    fignum = 1                                                                                                          # Declare starting figure number
+    t_msplot = times * time_conv                                                                                        # Declare time with units of ms for plotting
     dx = qsys['gpe']['dx']
     size = qsys['gpe']['x'].size
-    x_cut = int(0.6 * size)                                                                                             #These are cuts such that we observe the behavior about the initial location of the wave
-    x_cut_flipped = int(0.4 * size)
+    x_cut = int(0.65 * size)                                                                                            #These are cuts such that we observe the behavior about the initial location of the wave
+    x_cut_flipped = int(0.35 * size)
 
     @njit
     def v_muKelvin(v):
@@ -287,10 +314,25 @@ if __name__ == '__main__':
     v_muK = v(x) * muK_conv
     potential = v_muKelvin(v(x))
     plt.plot(x_mum, v_muK)
-
+    plt.fill_between(
+        x_mum[x_cut:],
+        potential[x_cut:],
+        potential.max(),
+        facecolor="orange",
+             color='orange',
+          alpha=0.2
+    )
+    plt.fill_between(
+        x_mum[:x_cut_flipped],
+        potential[:x_cut_flipped],
+        potential.max(),
+        facecolor="green",
+             color='green',
+          alpha=0.2
+    )
     plt.xlabel('$x$ ($\mu$m) ')
     plt.ylabel('$V(x)$ ($\mu$K)')
-    plt.xlim([-sys_params['x_amplitude'] * L_xmum, sys_params['x_amplitude'] * L_xmum])
+    plt.xlim(-x_amplitude * L_xmum, x_amplitude * L_xmum)
     plt.savefig(savespath + 'Potential' + '.png')
 
     ####################################################################################################################

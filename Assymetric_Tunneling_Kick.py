@@ -57,14 +57,14 @@ dens_conv = 1. / (L_xmum * L_ymum * L_zmum)     # Calculated version of density 
 # Parameters for computation
 propagation_dt = 1e-4
 
-height_asymmetric = 35.                         # Height parameter of asymmetric barrier
-delta = 5.                                      # Sharpness parameter of asymmetric barrier
+height_asymmetric = 30.                         # Height parameter of asymmetric barrier
+delta = 9.                                      # Width parameter of asymmetric barrier
 v_0 = 45.5                                      # Coefficient for the trapping potential
-offset = 20.                                    # width offset for gaussian potentials
+peak_offset = 5.                                # Centering offset for gaussian potentials
 
 # Create a tag using date and time to save and archive data
 today = date.today()
-filename = 'Kick_' + str(today.year) + str(today.month) + str(today.day) + "_" + str(Start_time.hour) + str(Start_time.minute)
+filename = str(today.year) + str(today.month) + str(today.day) + "_" + str(Start_time.hour) + str(Start_time.minute) + '_Kick'
 savesfolder = filename
 parent_dir = "/home/skref/PycharmProjects/GPE/Archive_Data"
 path = os.path.join(parent_dir, savesfolder)
@@ -80,8 +80,13 @@ def v(x, t=0.):
     """
     Potential energy
     """
-    return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
-    # return 3000 - 2800 * np.exp(-((x + offset)/ 45) ** 2) - 2850 * np.exp(-((x - offset) / 47) ** 2) - 100 * np.exp(-((x - 5) / 10) ** 2)
+    return height_asymmetric * (
+        np.exp(-((x + 3 * peak_offset) / delta) ** 2)
+        + (2 / 3) * np.exp(-((x + peak_offset) / delta) ** 2)
+        + 0.5 * np.exp(-((x - peak_offset) / delta) ** 2)
+        + 0.5 * np.exp(-((x - 3 * peak_offset) / delta) ** 2)
+        )
+    # return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
 
 @njit
@@ -89,8 +94,13 @@ def diff_v(x, t=0.):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
-    return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
-    # return (224 / 81) * (x + offset) * np.exp(-((x + offset)/ 45) ** 2) + (5700 / 2209) * (x - offset) * np.exp(-((x - offset) / 47) ** 2) + 2 * (x - 5) * np.exp(-((x - 5) / 10) ** 2)
+    return (-2 * height_asymmetric / delta ** 2) * (
+            np.exp(-((x + 3 * peak_offset) / delta) ** 2)
+            + (x + peak_offset) * (2 / 3) * np.exp(-((x + peak_offset) / delta) ** 2)
+            + (x - peak_offset) * 0.5 * np.exp(-((x - peak_offset) / delta) ** 2)
+            + (x - 3 * peak_offset) * 0.5 * np.exp(-((x - 3 * peak_offset) / delta) ** 2)
+        )
+    # return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
 
 @njit
@@ -242,11 +252,13 @@ def run_single_case(params):
 
 if __name__ == '__main__':
 
-    fignum = 1                                                  # Declare starting figure number
+    # Declare final parameters for dictionary
     T = 6. * np.pi                                              # Time duration for 6 periods
     times = np.linspace(0, T, 500)
-    t_msplot = times * time_conv                                # Declare time with units of ms for plotting
-    x_amplitude=80.
+    x_amplitude = 100.
+    # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
+    x_grid_dim = 2 * 1024,
+
 
     @njit
     def abs_boundary(x):
@@ -255,11 +267,11 @@ if __name__ == '__main__':
         """
         return np.sin(0.5 * np.pi * (x + x_amplitude) / x_amplitude) ** (0.05 * 1e-2)
 
+
     # save parameters as a separate bundle
     sys_params_right = dict(
         x_amplitude=x_amplitude,
-        # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
-        x_grid_dim=8 * 1024,
+        x_grid_dim=x_grid_dim,
         N=N,
         k=k,
         init_momentum_kick=22.,
@@ -293,11 +305,14 @@ if __name__ == '__main__':
     # Plot the potential in physical units
     ####################################################################################################################
 
+
+    fignum = 1                                                  # Declare starting figure number
+    t_msplot = times * time_conv                                # Declare time with units of ms for plotting
     dx = qsys_right['gpe']['dx']
     size = qsys_right['gpe']['x'].size
     #These are cuts such that we observe the behavior about the initial location of the wave
-    x_cut_right = int(0.575 * size)
-    x_cut_left = int(0.425 * size)
+    x_cut_right = int(0.75 * size)
+    x_cut_left = int(0.25 * size)
 
     @njit
     def v_muKelvin(v):
@@ -317,7 +332,7 @@ if __name__ == '__main__':
 
     plt.xlabel('$x$ ($\mu$m) ')
     plt.ylabel('$V(x)$ ($\mu$K)')
-    plt.xlim([-80 * L_xmum, 80 * L_xmum])
+    plt.xlim([-x_amplitude * L_xmum, x_amplitude * L_xmum])
     plt.savefig(savespath + 'Potential' + '.png')
 
     ####################################################################################################################
@@ -471,7 +486,7 @@ if __name__ == '__main__':
     )
     plt.xlabel('$x$ ($\mu$m) ')
     plt.ylabel('$V(x)$ ($\mu$K) Region')
-    plt.xlim([-80 * L_xmum, 80 * L_xmum])
+    plt.xlim([-x_amplitude * L_xmum, x_amplitude * L_xmum])
     plt.subplot(234)
     plt.title('Probability of Schrödinger on the left')
     plt.plot(
@@ -517,7 +532,7 @@ if __name__ == '__main__':
     )
     plt.xlabel('$x$ ($\mu$m) ')
     plt.ylabel('$V(x)$ ($\mu$K) Region')
-    plt.xlim([-80 * L_xmum, 80 * L_xmum])
+    plt.xlim([-x_amplitude * L_xmum, x_amplitude * L_xmum])
     plt.savefig(savespath + 'Transmission Probability' + '.png')
 
     # Get current time to finish timing of program

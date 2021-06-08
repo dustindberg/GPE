@@ -3,13 +3,11 @@ import pyfftw
 import pickle
 from numpy import linalg  # Linear algebra for dense matrix
 from numba import njit
-from numba.core.registry import CPUDispatcher
-from types import FunctionType
 from multiprocessing import cpu_count
 
 import os
 
-threads = 16
+threads = 4
 os.environ["OMP_NUM_THREADS"] = '{}'.format(threads)
 os.environ['NUMEXPR_MAX_THREADS']='{}'.format(threads)
 os.environ['NUMEXPR_NUM_THREADS']='{}'.format(threads)
@@ -104,12 +102,12 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
     minues = (-1) ** np.arange(x_grid_dim)
 
     # evaluate the potential energy
-    v = v(x, 0.)
+    v = v(x)  # Test by removing T here
     v_min = v.min()
     v -= v_min
 
     # evaluate the kinetic energy
-    k = k(p, 0.)
+    k = k(p)  # Test by removing T here
     k_min = k.min()
     k -= k_min
 
@@ -356,25 +354,25 @@ class SplitOpGPE1D(object):
 
         # Cache the potential if it does not depend on time
         if time_independent_v:
-            pre_calculated_v = v(x, 0.)
+            pre_calculated_v = v(x)  # Test by removing T here
             v = njit(lambda _, __: pre_calculated_v)
 
         # Cache the kinetic energy if it does not depend on time
         if time_independent_k:
-            pre_calculated_k = k(p, 0.)
+            pre_calculated_k = k(p)  # Test by removing T here
             k = njit(lambda _, __: pre_calculated_k)
 
-        @njit
+        @njit # (parallel=True)
         def expV(wavefunction, t, dt):
             """
             function to efficiently evaluate
                 wavefunction *= (-1) ** k * exp(-0.5j * dt * v)
             """
             wavefunction *= abs_boundary * np.exp(-0.5j * dt * (v(x, t + 0.5 * dt) + g * np.abs(wavefunction) ** 2))
-
+            wavefunction /= linalg.norm(wavefunction) * np.sqrt(dx)
         self.expV = expV
 
-        @njit
+        @njit # (parallel=True)
         def expK(wavefunction, t, dt):
             """
             function to efficiently evaluate
@@ -391,12 +389,12 @@ class SplitOpGPE1D(object):
 
             # Cache the potential if it does not depend on time
             if time_independent_v:
-                pre_calculated_diff_v = diff_v(x, 0.)
+                pre_calculated_diff_v = diff_v(x)
                 diff_v = njit(lambda _, __: pre_calculated_diff_v)
 
             # Cache the kinetic energy if it does not depend on time
             if time_independent_k:
-                pre_calculated_diff_k = diff_k(p, 0.)
+                pre_calculated_diff_k = diff_k(p)
                 diff_k = njit(lambda _, __: pre_calculated_diff_k)
 
             # Get codes for efficiently calculating the Ehrenfest relations
@@ -571,7 +569,7 @@ class SplitOpGPE1D(object):
         # normalize
         # this line is equivalent to
         # self.wavefunction /= np.sqrt(np.sum(np.abs(self.wavefunction) ** 2 ) * self.dx)
-        wavefunction /= linalg.norm(wavefunction) * np.sqrt(self.dx)
+        # wavefunction /= linalg.norm(wavefunction) * np.sqrt(self.dx)
 
     def get_ehrenfest(self):
         """
@@ -622,6 +620,7 @@ class SplitOpGPE1D(object):
 
             # save the current time
             self.times.append(self.t)
+            # print(self.dt)
 
     def set_wavefunction(self, wavefunc):
         """
@@ -629,10 +628,8 @@ class SplitOpGPE1D(object):
         :param wavefunc: 1D numpy array or function specifying the wave function
         :return: self
         """
-        if isinstance(wavefunc, (CPUDispatcher, FunctionType)):
-            self.wavefunction[:] = wavefunc(self.x)
 
-        elif isinstance(wavefunc, np.ndarray):
+        if isinstance(wavefunc, np.ndarray):
             # wavefunction is supplied as an array
 
             # perform the consistency checks
@@ -643,7 +640,7 @@ class SplitOpGPE1D(object):
             np.copyto(self.wavefunction, wavefunc.astype(np.complex))
 
         else:
-            raise ValueError("wavefunc must be either function or numpy.array")
+            self.wavefunction[:] = wavefunc(self.x)
 
         # normalize
         self.wavefunction /= linalg.norm(self.wavefunction) * np.sqrt(self.dx)

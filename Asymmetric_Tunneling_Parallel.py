@@ -8,7 +8,7 @@ from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D                        
 import datetime
 from datetime import date
 import pytz
-import pickle
+import _pickle as pickle
 from multiprocessing import Pool
 import os
 
@@ -36,7 +36,7 @@ omeg_x = 50 * 2 * np.pi                                                         
 omeg_y = 500 * 2 * np.pi                                                                                                # Harmonic oscillation in the y-axis in Hz
 omeg_z = 500 * 2 * np.pi                                                                                                # Harmonic oscillation in the z-axis in Hz
 omeg_cooling = 450 * 2 * np.pi                                                                                          # Harmonic oscillation for the trapping potential in Hz
-scale = 1                                                                                                               # Scaling factor for the interaction parameter
+scale = 1.0                                                                                                               # Scaling factor for the interaction parameter
 
 # Parameters calculated by Python
 L_x = np.sqrt(hbar / (m * omeg_x))                                                                                      # Characteristic length in the x-direction in meters
@@ -56,16 +56,26 @@ specvol_mum = (L_xmum * L_ymum * L_zmum) / N                                    
 dens_conv = 1. / (L_xmum * L_ymum * L_zmum)                                                                             # Calculated version of density unit conversion
 
 # Parameters for computation
-propagation_dt = 1e-4
-height_asymmetric = 30.                                                                                                 # Height parameter of asymmetric barrier
-delta = 9.                                                                                                              # Sharpness parameter of asymmetric barrier
-v_0 = 45.5                                                                                                              # Coefficient for the trapping potential
-peak_offset = 5.
-cooling_offset = 50.                                                                                                    # Center offset for cooling potential
+propagation_dt = 3e-5  #1e-5
+eps = 5e-4
+height_asymmetric = 1250.                                                                                                 # Height parameter of asymmetric barrier
+trap_height = 2000.
+sigma = 8.5
+delta = 2. * (sigma ** 2)
+v_0 = 10.0                                           # Coefficient for the trapping potential
+fwhm = 2. * sigma*np.sqrt(2*np.log(2))
+peak_offset = fwhm    # 0.5*FWHM = sigma*sqrt(2log(2))
+cooling_offset = 43.5                                # Center offset for cooling potential
+
 
 # Create a tag using date and time to save and archive data
 today = date.today()
-filename = str(today.year) + str(today.month) + str(today.day) + "_" + str(Start_time.hour) + str(Start_time.minute)
+def Replace(str1):
+    str1 = str1.replace('.', ',')
+    return str1
+today = date.today()
+filename = 'TEST3_Trap_TrapHeight' + Replace(str(trap_height)) + '_Sigma' + Replace(str(sigma)) + '_Height' \
+           + Replace(str(height_asymmetric)) + '_Vo' + Replace(str(v_0)) + '_Offset'+Replace(str(cooling_offset))
 savesfolder = filename
 parent_dir = "/home/skref/PycharmProjects/GPE/Archive_Data"
 path = os.path.join(parent_dir, savesfolder)
@@ -76,50 +86,102 @@ print("Directory '%s' created" % savesfolder)
 
 
 # Functions for computation
-@njit
-def v(x, t=0.):
+@njit(parallel=True)
+def v(x):
     """
     Potential energy
     """
-    return height_asymmetric * (
-        np.exp(-((x + 3 * peak_offset) / delta) ** 2)
-        + (2 / 3) * np.exp(-((x + peak_offset) / delta) ** 2)
-        + 0.5 * np.exp(-((x - peak_offset) / delta) ** 2)
-        + 0.5 * np.exp(-((x - 3 * peak_offset) / delta) ** 2)
-        )
-    # return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
+    return trap_height - height_asymmetric * (
+        np.exp(-(x + 2.1 * fwhm) ** 2 / delta)
+        + np.exp(-(x - 2.1 * fwhm) ** 2 / delta)
+        + np.exp(-(x - 1.5 * fwhm) ** 2 / delta)
+        + 0.80 * np.exp(-(x - 0.667 * fwhm) ** 2 / delta)
+        + 0.75 * np.exp(-x ** 2 / delta)
+        + 0.65 * np.exp(-(x + 0.667 * fwhm) ** 2 / delta)
+        + np.exp(-(x + 1.5 * fwhm) ** 2 / delta)
+    )
+    # return trap_height - height_asymmetric * (
+    #     0.325 * np.exp(-(x - 2.0 * peak_offset) ** 2 / delta)
+    #     + 0.55 * np.exp(-(x - 1.0 * peak_offset) ** 2 / delta)
+    #     + 0.60 * np.exp(-x ** 2 / delta)
+    #     + 0.46 * np.exp(-(x + 1.0 * peak_offset) ** 2 / delta)
+    #     + 0.21 * np.exp(-(x + 2.0 * peak_offset) ** 2 / delta)
+    #     + np.exp(-(x - 5.8 * peak_offset) ** 2 / (4 * delta))
+    #     + np.exp(-(x - 3.3 * peak_offset) ** 2 / (4 * delta))
+    #     + 1.000082 * np.exp(-(x + 3.3 * peak_offset) ** 2 / (4 * delta))
+    #     + 1.000082 * np.exp(-(x + 5.8 * peak_offset) ** 2 / (4 * delta))
+    # )
+#    return 0.5 * x ** 2 + height_asymmetric * (
+#        0.04 * np.exp(-(x+9.2) ** 2 / 25)
+#        + np.exp(-(x+4) ** 2 / 25)
+#        + 0.6 * np.exp(-(x-1.5) ** 2 / 25)
+#        + 0.2 * np.exp(-(x-7.415) ** 2 / 25)
+#    )
+#    return height_asymmetric * (
+#        np.exp(-((x + 3. * peak_offset) / delta) ** 2)
+#        + (2. / 3.) * np.exp(-((x + peak_offset) / delta) ** 2)
+#        + 0.5 * np.exp(-((x - peak_offset) / delta) ** 2)
+#        + 0.5 * np.exp(-((x - 3. * peak_offset) / delta) ** 2)
+#        )
+    #return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
 
-@njit
-def diff_v(x, t=0.):
+@njit(parallel=True)
+def diff_v(x):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
-    return (-2 * height_asymmetric / delta ** 2) * (
-            (x + 3 * peak_offset) * np.exp(-((x + 3 * peak_offset) / delta) ** 2)
-            + (x + peak_offset) * (2 / 3) * np.exp(-((x + peak_offset) / delta) ** 2)
-            + (x - peak_offset) * 0.5 * np.exp(-((x - peak_offset) / delta) ** 2)
-            + (x - 3 * peak_offset) * 0.5 * np.exp(-((x - 3 * peak_offset) / delta) ** 2)
-        )
+    return (2 * height_asymmetric / delta) * (
+        (x + 2.1 * fwhm) * np.exp(-(x + 2.1 * fwhm) ** 2 / delta)
+        + (x - 2.1 * fwhm) * np.exp(-(x - 2.1 * fwhm) ** 2 / delta)
+        + (x - 1.5 * fwhm) * np.exp(-(x - 1.5 * fwhm) ** 2 / delta)
+        + (x - 0.667 * fwhm) * 0.80 * np.exp(-(x - 0.667 * fwhm) ** 2 / delta)
+        + 0.75 * np.exp(-x ** 2 / delta)
+        + (x + 0.667 * fwhm) * 0.65 * np.exp(-(x + 0.667 * fwhm) ** 2 / delta)
+        + (x + 1.5 * fwhm) * np.exp(-(x + 1.5 * fwhm) ** 2 / delta)
+    )
+    # return (2 * height_asymmetric / delta) * (
+    #     (x - 2.0 * peak_offset) * 0.325 * np.exp(-(x - 2.0 * peak_offset) ** 2 / delta)
+    #     + (x - 1.0 * peak_offset) * 0.55 * np.exp(-(x - 1.0 * peak_offset) ** 2 / delta)
+    #     + x * 0.60 * np.exp(-x ** 2 / delta)
+    #     + (x + 1.0 * peak_offset) * 0.46 * np.exp(-(x + 1.0 * peak_offset) ** 2 / delta)
+    #     + (x + 2.0 * peak_offset) * 0.21 * np.exp(-(x + 2.0 * peak_offset) ** 2 / delta)
+    #     + (1. / 4.) * (x - 5.8 * peak_offset) * np.exp(-(x - 5.8 * peak_offset) ** 2 / (4 * delta))
+    #     + (1. / 4.) * (x - 3.3 * peak_offset) * np.exp(-(x - 3.3 * peak_offset) ** 2 / (4 * delta))
+    #     + (1. / 4.) * (x + 3.3 * peak_offset) * 1.000082 * np.exp(-(x + 3.3 * peak_offset) ** 2 / (4 * delta))
+    #     + (1. / 4.) * (x + 5.8 * peak_offset) * 1.000082 * np.exp(-(x + 5.8 * peak_offset) ** 2 / (4 * delta))
+    # )
+#    return x + (-2 * height_asymmetric / 25) *(
+#        (x+9.2) * 0.04 * np.exp(-(x+9.2) ** 2 / 25)
+#        + (x+4) * np.exp(-(x+4) ** 2 / 25)
+#        + (x-1.5) * 0.6 * np.exp(-(x-1.5) ** 2 / 25)
+#        + (x-7.415) * 0.2 * np.exp(-(x-7.415) ** 2 / 25)
+#    )
+#    return (-2 * height_asymmetric / delta ** 2) * (
+#            (x + 3 * peak_offset) * np.exp(-((x + 3 * peak_offset) / delta) ** 2)
+#            + (x + peak_offset) * (2. / 3.) * np.exp(-((x + peak_offset) / delta) ** 2)
+#            + (x - peak_offset) * 0.5 * np.exp(-((x - peak_offset) / delta) ** 2)
+#            + (x - 3 * peak_offset) * 0.5 * np.exp(-((x - 3 * peak_offset) / delta) ** 2)
+#        )
     # return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
 
 @njit
-def diff_k(p, t=0.):
+def diff_k(p):
     """
     the derivative of the kinetic energy for Ehrenfest theorem evaluation
     """
     return p
 
-@njit
-def k(p, t=0.):
+@njit(parallel=True)
+def k(p):
     """
     Non-relativistic kinetic energy
     """
     return 0.5 * p ** 2
 
 @njit
-def initial_trap(x, t=0):
+def initial_trap(x):
     """
     Trapping potential to get the initial state
     :param x:
@@ -143,7 +205,6 @@ def run_single_case(params):
         g=g,
         dt=1e-3,
         epsilon=1e-9,
-
         **params
     )
 
@@ -166,6 +227,7 @@ def run_single_case(params):
         v=v,
         g=g,
         dt=propagation_dt,
+        epsilon = eps,
         **params
     ).set_wavefunction(init_state)
 
@@ -184,6 +246,7 @@ def run_single_case(params):
         v=v,
         g=0.,
         dt=propagation_dt,
+        epsilon = eps,
         **params
     ).set_wavefunction(init_state)
 
@@ -241,36 +304,26 @@ if __name__ == '__main__':
 
     # Declare final parameters for dictionary
     # T = .5 * 2. * 2. * np.pi                                                                                          # Time length of two periods
-    T = np.pi                                                                                                           # Time length of 1 period
+    T = 4.0                                                                                                         # Time length of 1 period
     times = np.linspace(0, T, 500)
-    x_amplitude = 150.                                                                                                  # Set the range for calculation
-    x_grid_dim = 2 * 1024,                                                                                              # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
-
-
-    @njit
-    def abs_boundary(x):
-        """
-        Absorbing boundary similar to the Blackman filter
-        """
-        return np.sin(0.5 * np.pi * (x + x_amplitude) / x_amplitude) ** (0.05 * 1e-2)
-
+    x_amplitude = 75.                                                                                                  # Set the range for calculation
+    x_grid_dim = 16 * 1024                                                                                              # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
 
     # save parameters as a separate bundle
     sys_params = dict(
-        x_amplitude=150.,
-        x_grid_dim=2 * 1024,
+        x_amplitude=x_amplitude,
+        x_grid_dim=x_grid_dim,
         N=N,
         k=k,
         initial_trap=initial_trap,
         diff_v=diff_v,
         diff_k=diff_k,
         times=times,
-        abs_boundary=abs_boundary,
     )
 
     sys_params_flipped = sys_params.copy()                                                                              #copy to create parameters for the flipped case
 
-    sys_params_flipped['initial_trap'] = njit(lambda x, t: initial_trap(-x, t))                                         #This is used to flip the initial trap about the offset
+    sys_params_flipped['initial_trap'] = njit(lambda x: initial_trap(-x))                                         #This is used to flip the initial trap about the offset
 
     ####################################################################################################################
     # Run calculations in parallel
@@ -296,8 +349,28 @@ if __name__ == '__main__':
     t_msplot = times * time_conv                                                                                        # Declare time with units of ms for plotting
     dx = qsys['gpe']['dx']
     size = qsys['gpe']['x'].size
-    x_cut = int(0.65 * size)                                                                                            #These are cuts such that we observe the behavior about the initial location of the wave
-    x_cut_flipped = int(0.35 * size)
+    x_cut = int(0.72 * size) # int(0.735 * size)
+    x_cut_flipped = int(0.28 * size) # int(0.265 * size)
+    # x_cut = int(0.65 * size)                                                                                          # These are cuts such that we observe the behavior about the initial location of the wave
+    # x_cut_flipped = int(0.35 * size)
+
+    outfilename = filename + ".txt"
+    outpath = os.path.join(savespath, outfilename)
+    out = open(outpath, "w")
+    out.write(
+        "Initial Parameters: \n"
+        + "height_asymmetric = " + str(height_asymmetric) + "\n"
+        + "v_0 = " + str(v_0) + "\n"
+        + "cooling_offset = " + str(cooling_offset) + "\n"
+        + "x_amplitude = " + str(x_amplitude) + "\n"
+        + "x_grid_dim = " + str(x_grid_dim) + "\n"
+        + "Propagation dt = " + str(propagation_dt) + "\n"
+        + "Epsilon = " + str(eps) + "\n"
+        + "Scale of g = " + str(scale) + "\n"
+        + "Time run for = " + str(T) + "seconds \n"
+    )
+
+
 
     @njit
     def v_muKelvin(v):
@@ -313,21 +386,22 @@ if __name__ == '__main__':
     x_mum = x * L_xmum
     v_muK = v(x) * muK_conv
     potential = v_muKelvin(v(x))
-    plt.plot(x_mum, v_muK)
+    plt.plot(x_mum, v_muK, color='k')
+    plt.hlines((qsys['gpe']['hamiltonian_average'][0])*muK_conv, x_mum.min(), x_mum.max(),colors = 'r')
     plt.fill_between(
         x_mum[x_cut:],
         potential[x_cut:],
         potential.max(),
-        facecolor="orange",
-             color='orange',
+        facecolor="b",
+             color='b',
           alpha=0.2
     )
     plt.fill_between(
         x_mum[:x_cut_flipped],
         potential[:x_cut_flipped],
         potential.max(),
-        facecolor="green",
-             color='green',
+        facecolor="orange",
+             color='orange',
           alpha=0.2
     )
     plt.xlabel('$x$ ($\mu$m) ')
@@ -361,7 +435,7 @@ if __name__ == '__main__':
             origin='lower',
             extent=extent,
             aspect=(extent[1] - extent[0]) / (extent[-1] - extent[-2]),
-            norm=SymLogNorm(vmin=1e-13, vmax=1., linthresh=1e-15)
+            norm=SymLogNorm(vmin=1e-7, vmax=1., linthresh=1e-15)
         )
         plt.xlabel('Coordinate $x$ (a.u.)')
         plt.ylabel('Time $t$ (a.u.)')
@@ -383,7 +457,7 @@ if __name__ == '__main__':
         plt.plot(t_ms, UnivariateSpline(times, qsys['x_average'], s=0).derivative()(times),
                  '-r', label='$d\\langle\\hat{x}\\rangle / dt$')
         plt.plot(t_ms, qsys['x_average_rhs'], '--b', label='$\\langle\\hat{p}\\rangle$')
-        plt.legend()
+        plt.legend(loc='lower right')
         plt.ylabel('momentum')
         plt.xlabel('time $t$ (a.u.)')
 
@@ -393,7 +467,7 @@ if __name__ == '__main__':
         plt.plot(t_ms, UnivariateSpline(times, qsys['p_average'], s=0).derivative()(times),
                  '-r', label='$d\\langle\\hat{p}\\rangle / dt$')
         plt.plot(t_ms, qsys['p_average_rhs'], '--b', label='$\\langle -U\'(\\hat{x})\\rangle$')
-        plt.legend()
+        plt.legend(loc='lower right')
         plt.ylabel('force')
         plt.xlabel('time $t$ (a.u.)')
 
@@ -408,6 +482,11 @@ if __name__ == '__main__':
             )
         )
         print("Initial Energy {:.4e}".format(h[0]))
+
+        out.write("\n" + str(plot_title) + " Hamiltonian is preserved within the accuracy of {:.1e} percent".format(
+                100. * (1. - h.min() / h.max())) + "\n"
+                + str(plot_title) + " Initial Energy {:.4e}".format(h[0]) + "\n"
+        )
 
         plt.plot(t_ms, h * muK_conv)
         plt.ylabel('Energy ($\mu$K)')
@@ -456,7 +535,7 @@ if __name__ == '__main__':
         np.sum(np.abs(qsys_flipped['schrodinger']['wavefunctions'])[:, :x_cut_flipped] ** 2, axis=1) * dx,
         label='Flipped Schrodinger'
     )
-    plt.legend()
+    plt.legend(loc='upper left')
     plt.xlabel('time $t$ (ms)')
     plt.ylabel("transmission probability")
 
@@ -471,7 +550,7 @@ if __name__ == '__main__':
         np.sum(np.abs(qsys_flipped['gpe']['wavefunctions'])[:, :x_cut_flipped] ** 2, axis=1) * dx,
         label='Flipped GPE'
     )
-    plt.legend()
+    plt.legend(loc='upper left')
     plt.xlabel('Time $t$ (ms)')
     plt.ylabel("Transmission Probability")
     plt.savefig(savespath + 'Transmission Probability' + '.png')
@@ -481,4 +560,8 @@ if __name__ == '__main__':
     print ("Start time: {}:{}:{}".format(Start_time.hour,Start_time.minute,Start_time.second))                          # Print times for review
     print ("End time: {}:{}:{}".format(End_time.hour, End_time.minute, End_time.second))
 
-    plt.show()                                                                                                          #generate all plots
+    print("Start time: {}:{}:{}".format(Start_time.hour,Start_time.minute,Start_time.second), file=out)
+    print("End time: {}:{}:{}".format(End_time.hour, End_time.minute, End_time.second), file=out)
+
+    out.close()
+    plt.show()                                                                                                          # Generate all plots

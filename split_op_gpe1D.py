@@ -7,7 +7,7 @@ from multiprocessing import cpu_count
 
 import os
 
-threads = 4
+threads = 2
 os.environ["OMP_NUM_THREADS"] = '{}'.format(threads)
 os.environ['NUMEXPR_MAX_THREADS']='{}'.format(threads)
 os.environ['NUMEXPR_NUM_THREADS']='{}'.format(threads)

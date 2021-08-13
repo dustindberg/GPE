@@ -1,10 +1,10 @@
 from numba import njit
 import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize, SymLogNorm
+from matplotlib.colors import SymLogNorm
 import numpy as np
 from scipy.constants import hbar, Boltzmann
 from scipy.interpolate import UnivariateSpline
-from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D                                                                # class for the split operator propagation
+from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D    # class for the split operator propagation
 import datetime
 from datetime import date
 import pytz
@@ -13,69 +13,72 @@ from multiprocessing import Pool
 import os
 
 
-Start_time = datetime.datetime.now(pytz.timezone('US/Central'))                                                         # Start timing for optimizing runs
+Start_time = datetime.datetime.now(pytz.timezone('US/Central')) # Start timing for optimizing runs
 
 ########################################################################################################################
 # Define the initial parameters for interaction and potential
 ########################################################################################################################
 
 # Define physical parameters
-a_0 = 5.291772109e-11                                                                                                   # Bohr Radius in meters
+a_0 = 5.291772109e-11               # Bohr Radius in meters
 
 # Rubidium-87 properties
-m = 1.4431609e-25                                                                                                       # Calculated mass of 87Rb in kg
-a_s = 100 * a_0                                                                                                         # Background scattering length of 87Rb in meters
+m = 1.4431609e-25                   # Calculated mass of 87Rb in kg
+a_s = 100 * a_0                     # Background scattering length of 87Rb in meters
 
 # Potassium-41 properties
-# m= 6.80187119e-26                                                                                                      # Calculated mass of 41K in kg
-# a_s = 65.42 * a_0                                                                                                      # Background scattering length of 41K in meters
+# m= 6.80187119e-26                  # Calculated mass of 41K in kg
+# a_s = 65.42 * a_0                  # Background scattering length of 41K in meters
 
 # Experiment parameters
-N = 1e4                                                                                                                 # Number of particles
-omeg_x = 50 * 2 * np.pi                                                                                                 # Harmonic oscillation in the x-axis in Hz
-omeg_y = 500 * 2 * np.pi                                                                                                # Harmonic oscillation in the y-axis in Hz
-omeg_z = 500 * 2 * np.pi                                                                                                # Harmonic oscillation in the z-axis in Hz
-omeg_cooling = 450 * 2 * np.pi                                                                                          # Harmonic oscillation for the trapping potential in Hz
-scale = 1.0                                                                                                               # Scaling factor for the interaction parameter
+N = 1e4                             # Number of particles
+omeg_x = 50 * 2 * np.pi             # Harmonic oscillation in the x-axis in Hz
+omeg_y = 500 * 2 * np.pi            # Harmonic oscillation in the y-axis in Hz
+omeg_z = 500 * 2 * np.pi            # Harmonic oscillation in the z-axis in Hz
+omeg_cooling = 450 * 2 * np.pi      # Harmonic oscillation for the trapping potential in Hz
+scale = 1.0                           # Scaling factor for the interaction parameter
 
 # Parameters calculated by Python
-L_x = np.sqrt(hbar / (m * omeg_x))                                                                                      # Characteristic length in the x-direction in meters
-L_y = np.sqrt(hbar / (m * omeg_y))                                                                                      # Characteristic length in the y-direction in meters
-L_z = np.sqrt(hbar / (m * omeg_z))                                                                                      # Characteristic length in the z-direction in meters
-g = 2 * N * L_x * m * scale * a_s * np.sqrt(omeg_y * omeg_z) / hbar                                                     # Dimensionless interaction parameter
+L_x = np.sqrt(hbar / (m * omeg_x))  # Characteristic length in the x-direction in meters
+L_y = np.sqrt(hbar / (m * omeg_y))  # Characteristic length in the y-direction in meters
+L_z = np.sqrt(hbar / (m * omeg_z))  # Characteristic length in the z-direction in meters
+g = 2 * N * L_x * m * scale * a_s * np.sqrt(omeg_y * omeg_z) / hbar     # Dimensionless interaction parameter
 
 # Conversion factors to plot in physical units
-L_xmum = np.sqrt(hbar / (m * omeg_x)) * 1e6                                                                             # Characteristic length in the x-direction in meters
-L_ymum = np.sqrt(hbar / (m * omeg_y)) * 1e6                                                                             # Characteristic length in the y-direction in meters
-L_zmum = np.sqrt(hbar / (m * omeg_z)) * 1e6                                                                             # Characteristic length in the z-direction in meters
-time_conv = 1. / omeg_x * 1e3                                                                                           # Converts characteristic time into milliseconds
-energy_conv = hbar * omeg_x                                                                                             # Converts dimensionless energy terms to Joules
-muK_conv = energy_conv * (1e6 / Boltzmann)                                                                              # Converts Joule terms to microKelvin
-nK_conv = energy_conv * (1e9 / Boltzmann)                                                                               # Converts Joule terms to nanoKelvin
-specvol_mum = (L_xmum * L_ymum * L_zmum) / N                                                                            # Converts dimensionless spacial terms into micrometers^3 per particle
-dens_conv = 1. / (L_xmum * L_ymum * L_zmum)                                                                             # Calculated version of density unit conversion
+L_xmum = np.sqrt(hbar / (m * omeg_x)) * 1e6     # Characteristic length in the x-direction in meters
+L_ymum = np.sqrt(hbar / (m * omeg_y)) * 1e6     # Characteristic length in the y-direction in meters
+L_zmum = np.sqrt(hbar / (m * omeg_z)) * 1e6     # Characteristic length in the z-direction in meters
+time_conv = 1. / omeg_x * 1e3                   # Converts characteristic time into milliseconds
+energy_conv = hbar * omeg_x                     # Converts dimensionless energy terms to Joules
+muK_conv = energy_conv * (1e6 / Boltzmann)      # Converts Joule terms to microKelvin
+nK_conv = energy_conv * (1e9 / Boltzmann)       # Converts Joule terms to nanoKelvin
+specvol_mum = (L_xmum * L_ymum * L_zmum) / N    # Converts dimensionless spacial terms into micrometers^3 per particle
+dens_conv = 1. / (L_xmum * L_ymum * L_zmum)     # Calculated version of density unit conversion
 
 # Parameters for computation
-propagation_dt = 3e-5  #1e-5
+propagation_dt = 3e-5  # 1e-5
 eps = 5e-4
-height_asymmetric = 1250.                                                                                                 # Height parameter of asymmetric barrier
-trap_height = 2000.
-sigma = 8.5
+height_asymmetric = 1442.   # Height parameter of asymmetric barrier
+trap_height = 2000.         # Used for trap height
+sigma = 8.5                 # Width parameter for gaussian
 delta = 2. * (sigma ** 2)
-v_0 = 10.0                                           # Coefficient for the trapping potential
+v_0 = 10.0                   # Coefficient for the trapping potential
 fwhm = 2. * sigma*np.sqrt(2*np.log(2))
-peak_offset = fwhm    # 0.5*FWHM = sigma*sqrt(2log(2))
-cooling_offset = 43.5                                # Center offset for cooling potential
+peak_offset = 0.75 * fwhm
+cooling_offset = 44.5       # Center offset for cooling potential
 
 
 # Create a tag using date and time to save and archive data
 today = date.today()
-def Replace(str1):
+
+
+def replace(str1):
     str1 = str1.replace('.', ',')
     return str1
-today = date.today()
-filename = 'TEST3_Trap_TrapHeight' + Replace(str(trap_height)) + '_Sigma' + Replace(str(sigma)) + '_Height' \
-           + Replace(str(height_asymmetric)) + '_Vo' + Replace(str(v_0)) + '_Offset'+Replace(str(cooling_offset))
+
+
+filename = 'Trap_Height' + replace(str(height_asymmetric)) + '_Sigma' + replace(str(sigma)) + '_Vo' +\
+           replace(str(v_0)) + '_Offset' + replace(str(cooling_offset)) + '_T12,0'
 savesfolder = filename
 parent_dir = "/home/skref/PycharmProjects/GPE/Archive_Data"
 path = os.path.join(parent_dir, savesfolder)
@@ -92,14 +95,15 @@ def v(x):
     Potential energy
     """
     return trap_height - height_asymmetric * (
-        np.exp(-(x + 2.1 * fwhm) ** 2 / delta)
-        + np.exp(-(x - 2.1 * fwhm) ** 2 / delta)
-        + np.exp(-(x - 1.5 * fwhm) ** 2 / delta)
-        + 0.80 * np.exp(-(x - 0.667 * fwhm) ** 2 / delta)
-        + 0.75 * np.exp(-x ** 2 / delta)
-        + 0.65 * np.exp(-(x + 0.667 * fwhm) ** 2 / delta)
-        + np.exp(-(x + 1.5 * fwhm) ** 2 / delta)
+        np.exp(-(x + 45.) ** 2 / delta)
+        + np.exp(-(x + 30.) ** 2 / delta)
+        + 0.7 * np.exp(-(x + 15.) ** 2 / delta)
+        + 0.9 * np.exp(-(x - 0.5) ** 2 / delta)
+        + 0.7 * np.exp(-(x - 15.) ** 2 / delta)
+        + np.exp(-(x - 30.) ** 2 / delta)
+        + np.exp(-(x - 45.) ** 2 / delta)
     )
+
     # return trap_height - height_asymmetric * (
     #     0.325 * np.exp(-(x - 2.0 * peak_offset) ** 2 / delta)
     #     + 0.55 * np.exp(-(x - 1.0 * peak_offset) ** 2 / delta)
@@ -111,18 +115,19 @@ def v(x):
     #     + 1.000082 * np.exp(-(x + 3.3 * peak_offset) ** 2 / (4 * delta))
     #     + 1.000082 * np.exp(-(x + 5.8 * peak_offset) ** 2 / (4 * delta))
     # )
-#    return 0.5 * x ** 2 + height_asymmetric * (
-#        0.04 * np.exp(-(x+9.2) ** 2 / 25)
-#        + np.exp(-(x+4) ** 2 / 25)
-#        + 0.6 * np.exp(-(x-1.5) ** 2 / 25)
-#        + 0.2 * np.exp(-(x-7.415) ** 2 / 25)
-#    )
-#    return height_asymmetric * (
-#        np.exp(-((x + 3. * peak_offset) / delta) ** 2)
-#        + (2. / 3.) * np.exp(-((x + peak_offset) / delta) ** 2)
-#        + 0.5 * np.exp(-((x - peak_offset) / delta) ** 2)
-#        + 0.5 * np.exp(-((x - 3. * peak_offset) / delta) ** 2)
-#        )
+
+    # return height_asymmetric * (
+    #     np.exp(-(x + 8.5 * peak_offset) ** 2 / delta)
+    #     + 0.80 * np.exp(-(x + 7.0 * peak_offset) ** 2 / delta)
+    #     + 0.60 * np.exp(-(x + 5.5 * peak_offset) ** 2 / delta)
+    #     + 0.40 * np.exp(-(x + 4.0 * peak_offset) ** 2 / delta)
+    #     + 0.20 * np.exp(-(x + 2.5 * peak_offset) ** 2 / delta)
+    #     + 1.00 * np.exp(-(x - 2.5 * peak_offset) ** 2 / delta)
+    #     + 0.80 * np.exp(-(x - 4.0 * peak_offset) ** 2 / delta)
+    #     + 0.60 * np.exp(-(x - 5.5 * peak_offset) ** 2 / delta)
+    #     + 0.40 * np.exp(-(x - 7.0 * peak_offset) ** 2 / delta)
+    #     + 0.20 * np.exp(-(x - 8.5 * peak_offset) ** 2 / delta)
+    # )
     #return 0.5 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
 
@@ -132,38 +137,14 @@ def diff_v(x):
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
     return (2 * height_asymmetric / delta) * (
-        (x + 2.1 * fwhm) * np.exp(-(x + 2.1 * fwhm) ** 2 / delta)
-        + (x - 2.1 * fwhm) * np.exp(-(x - 2.1 * fwhm) ** 2 / delta)
-        + (x - 1.5 * fwhm) * np.exp(-(x - 1.5 * fwhm) ** 2 / delta)
-        + (x - 0.667 * fwhm) * 0.80 * np.exp(-(x - 0.667 * fwhm) ** 2 / delta)
-        + 0.75 * np.exp(-x ** 2 / delta)
-        + (x + 0.667 * fwhm) * 0.65 * np.exp(-(x + 0.667 * fwhm) ** 2 / delta)
-        + (x + 1.5 * fwhm) * np.exp(-(x + 1.5 * fwhm) ** 2 / delta)
+        (x + 45.) * np.exp(-(x + 45.) ** 2 / delta)
+        + (x + 30.) * np.exp(-(x + 30.) ** 2 / delta)
+        + (x + 15.) * 0.7 * np.exp(-(x + 15.) ** 2 / delta)
+        + (x - 0.5) * 0.9 * np.exp(-(x - 0.5) ** 2 / delta)
+        + (x - 15.) * 0.7 * np.exp(-(x - 15.) ** 2 / delta)
+        + (x - 30.) * np.exp(-(x - 30.) ** 2 / delta)
+        + (x - 45.) * np.exp(-(x - 45.) ** 2 / delta)
     )
-    # return (2 * height_asymmetric / delta) * (
-    #     (x - 2.0 * peak_offset) * 0.325 * np.exp(-(x - 2.0 * peak_offset) ** 2 / delta)
-    #     + (x - 1.0 * peak_offset) * 0.55 * np.exp(-(x - 1.0 * peak_offset) ** 2 / delta)
-    #     + x * 0.60 * np.exp(-x ** 2 / delta)
-    #     + (x + 1.0 * peak_offset) * 0.46 * np.exp(-(x + 1.0 * peak_offset) ** 2 / delta)
-    #     + (x + 2.0 * peak_offset) * 0.21 * np.exp(-(x + 2.0 * peak_offset) ** 2 / delta)
-    #     + (1. / 4.) * (x - 5.8 * peak_offset) * np.exp(-(x - 5.8 * peak_offset) ** 2 / (4 * delta))
-    #     + (1. / 4.) * (x - 3.3 * peak_offset) * np.exp(-(x - 3.3 * peak_offset) ** 2 / (4 * delta))
-    #     + (1. / 4.) * (x + 3.3 * peak_offset) * 1.000082 * np.exp(-(x + 3.3 * peak_offset) ** 2 / (4 * delta))
-    #     + (1. / 4.) * (x + 5.8 * peak_offset) * 1.000082 * np.exp(-(x + 5.8 * peak_offset) ** 2 / (4 * delta))
-    # )
-#    return x + (-2 * height_asymmetric / 25) *(
-#        (x+9.2) * 0.04 * np.exp(-(x+9.2) ** 2 / 25)
-#        + (x+4) * np.exp(-(x+4) ** 2 / 25)
-#        + (x-1.5) * 0.6 * np.exp(-(x-1.5) ** 2 / 25)
-#        + (x-7.415) * 0.2 * np.exp(-(x-7.415) ** 2 / 25)
-#    )
-#    return (-2 * height_asymmetric / delta ** 2) * (
-#            (x + 3 * peak_offset) * np.exp(-((x + 3 * peak_offset) / delta) ** 2)
-#            + (x + peak_offset) * (2. / 3.) * np.exp(-((x + peak_offset) / delta) ** 2)
-#            + (x - peak_offset) * 0.5 * np.exp(-((x - peak_offset) / delta) ** 2)
-#            + (x - 3 * peak_offset) * 0.5 * np.exp(-((x - 3 * peak_offset) / delta) ** 2)
-#        )
-    # return x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
 
 @njit
@@ -303,11 +284,11 @@ def run_single_case(params):
 if __name__ == '__main__':
 
     # Declare final parameters for dictionary
-    # T = .5 * 2. * 2. * np.pi                                                                                          # Time length of two periods
-    T = 4.0                                                                                                         # Time length of 1 period
+    # T = .5 * 2. * 2. * np.pi  # Time length of two periods
+    T = 12.0                     # Total time (unitless)
     times = np.linspace(0, T, 500)
-    x_amplitude = 75.                                                                                                  # Set the range for calculation
-    x_grid_dim = 16 * 1024                                                                                              # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
+    x_amplitude = 80.           # Set the range for calculation
+    x_grid_dim = 16 * 1024      # For faster testing: 8*1024, more accuracy: 32*1024, best blend: 16x32
 
     # save parameters as a separate bundle
     sys_params = dict(
@@ -349,8 +330,8 @@ if __name__ == '__main__':
     t_msplot = times * time_conv                                                                                        # Declare time with units of ms for plotting
     dx = qsys['gpe']['dx']
     size = qsys['gpe']['x'].size
-    x_cut = int(0.72 * size) # int(0.735 * size)
-    x_cut_flipped = int(0.28 * size) # int(0.265 * size)
+    x_cut = int(0.7 * size) # int(0.735 * size)
+    x_cut_flipped = int(0.3 * size) # int(0.265 * size)
     # x_cut = int(0.65 * size)                                                                                          # These are cuts such that we observe the behavior about the initial location of the wave
     # x_cut_flipped = int(0.35 * size)
 

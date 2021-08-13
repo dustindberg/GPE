@@ -1,6 +1,6 @@
 import numpy as np
 import pyfftw
-import pickle
+import _pickle as pickle
 from numpy import linalg  # Linear algebra for dense matrix
 from numba import njit
 from multiprocessing import cpu_count

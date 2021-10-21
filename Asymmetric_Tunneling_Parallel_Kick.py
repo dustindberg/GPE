@@ -4,9 +4,8 @@ from matplotlib.colors import SymLogNorm
 import numpy as np
 from scipy.constants import hbar
 from scipy.interpolate import UnivariateSpline
-from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D    # class for the split operator propagation
+from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D            # class for the split operator propagation
 import datetime
-from datetime import date
 import pytz
 import pickle as pickle
 from multiprocessing import Pool
@@ -21,59 +20,63 @@ Start_time = datetime.datetime.now(pytz.timezone('US/Central'))
 ########################################################################################################################
 
 # Define physical parameters
-a_0 = 5.291772109e-11               # Bohr Radius in meters
+a_0 = 5.291772109e-11                           # Bohr Radius in meters
 
 # Rubidium-87 properties
-m = 1.4431609e-25                   # Calculated mass of 87Rb in kg
-a_s = 100 * a_0                     # Background scattering length of 87Rb in meters
+m = 1.4431609e-25                               # Calculated mass of 87Rb in kg
+a_s = 100 * a_0                                  # Background scattering length of 87Rb in meters
 
 # Potassium-41 properties
-# m= 6.80187119e-26                  # Calculated mass of 41K in kg
-# a_s = 65.42 * a_0                  # Background scattering length of 41K in meters
+# m= 6.80187119e-26                               # Calculated mass of 41K in kg
+# a_s = 65.42 * a_0                               # Background scattering length of 41K in meters
 
 # Experiment parameters
-N = 1e4                             # Number of particles
-omeg_x = 50 * 2 * np.pi             # Harmonic oscillation in the x-axis in Hz
-omeg_y = 500 * 2 * np.pi            # Harmonic oscillation in the y-axis in Hz
-omeg_z = 500 * 2 * np.pi            # Harmonic oscillation in the z-axis in Hz
-omeg_cooling = 450 * 2 * np.pi      # Harmonic oscillation for the trapping potential in Hz
-scale = 1.0                           # Scaling factor for the interaction parameter
+N = 1e4                                         # Number of particles
+omeg_x = 50 * 2 * np.pi                         # Harmonic oscillation in the x-axis in Hz
+omeg_y = 500 * 2 * np.pi                        # Harmonic oscillation in the y-axis in Hz
+omeg_z = 500 * 2 * np.pi                        # Harmonic oscillation in the z-axis in Hz
+omeg_cooling = 450 * 2 * np.pi                  # Harmonic oscillation for the trapping potential in Hz
+scale = 1.0                                     # Scaling factor for the interaction parameter
+kick = 7.0
 
 # Parameters calculated by Python
-L_x = np.sqrt(hbar / (m * omeg_x))  # Characteristic length in the x-direction in meters
-L_y = np.sqrt(hbar / (m * omeg_y))  # Characteristic length in the y-direction in meters
-L_z = np.sqrt(hbar / (m * omeg_z))  # Characteristic length in the z-direction in meters
-g = 2 * N * L_x * m * scale * a_s * np.sqrt(omeg_y * omeg_z) / hbar     # Dimensionless interaction parameter
+L_x = np.sqrt(hbar / (m * omeg_x))              # Characteristic length in the x-direction in meters
+L_y = np.sqrt(hbar / (m * omeg_y))              # Characteristic length in the y-direction in meters
+L_z = np.sqrt(hbar / (m * omeg_z))              # Characteristic length in the z-direction in meters
+# Dimensionless interaction parameter
+g = 2 * N * L_x * m * scale * a_s * np.sqrt(omeg_y * omeg_z) / hbar
 
 
 def replace(str1):
+    """
+    Used for creation of tagging system for better organization
+    :param str1: A float with decimal places to be converted
+    :return: the string with no '.' for better archive practices
+    """
     str1 = str1.replace('.', ',')
     return str1
 
 
 ########################################################################################################################
-# Computational parameters which are needed for transfer to graphing file
+# Parameters needed for transfer to graphing file
 ########################################################################################################################
-propagation_dt = 3e-5           # dt for adaptive step
+propagation_dt = 3e-3           # dt for adaptive step
 eps = 5e-4                      # Error tolerance for adaptive step
-height_asymmetric = 285         # Height parameter of asymmetric barrier
-trap_height = 400.              # Used for trap height
-sigma = 8.5                     # Width parameter for gaussian
+height_asymmetric = 45.         # Height parameter of asymmetric barrier
+sigma = 8.5                     # For estimating realistic barrier configurations
 delta = 2. * (sigma ** 2)       # Width parameter for realistic barrier
-v_0 = 0.5                       # Coefficient for the trapping potential (was 10 for paper run)
-cooling_offset = 37.0           # Center offset for cooling potential
-prob_region = 0.7               # For calculating probability
-prob_region_flipped = 0.3       # For calculating probability of the flipped case
-T = 40.0                        # Total time
+v_0 = 0.5                       # Coefficient for the trapping potential
+cooling_offset = 65.            # Center offset for cooling potential
+prob_region = 0.64              # For calculating probability
+prob_region_flipped = 0.36      # For calculating probability of the flipped case
+T = 12.5                        # Total time
 times = np.linspace(0, T, 500)  # Time grid
-x_amplitude = 80.               # Set the range for calculation
+x_amplitude = 150.              # Set the range for calculation
 x_grid_dim = 32 * 1024          # For faster testing: 8*1024, more accuracy: 32*1024, best blend: 16x32
 
 # Create a tag using date and time to save and archive data
-today = date.today()
-
-filename = 'Trap_Height' + replace(str(height_asymmetric)) + '_Sigma' + replace(str(sigma)) + '_Vo' +\
-           replace(str(v_0)) + '_Offset' + replace(str(cooling_offset)) + '_T' + replace(str(T))
+filename = 'REDO_Kick' + replace(str(kick)) + '_Sigma' + replace(str(sigma)) \
+           + '_Height' + replace(str(height_asymmetric)) + '_Vo' + replace(str(v_0)) + '_T' + replace(str(T))
 savesfolder = filename
 parent_dir = "/home/skref/PycharmProjects/GPE/Archive_Data"
 path = os.path.join(parent_dir, savesfolder)
@@ -89,14 +92,10 @@ def v(x):
     """
     Potential energy
     """
-    return trap_height - height_asymmetric * (
-        np.exp(-(x + 45.) ** 2 / delta)
-        + np.exp(-(x + 30.) ** 2 / delta)
-        + 0.85 * np.exp(-(x + 15.) ** 2 / delta)
-        + 0.95 * np.exp(-(x - 0.3) ** 2 / delta)
-        + 0.85 * np.exp(-(x - 15.) ** 2 / delta)
-        + np.exp(-(x - 30.) ** 2 / delta)
-        + np.exp(-(x - 45.) ** 2 / delta)
+    return height_asymmetric * (
+        np.exp(-(x + 15.) ** 2 / delta)
+        + 0.70 * np.exp(-x ** 2 / delta)
+        + 0.30 * np.exp(-(x - 15.) ** 2 / delta)
     )
 
 
@@ -105,14 +104,10 @@ def diff_v(x):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
-    return (2 * height_asymmetric / delta) * (
-        (x + 45.) * np.exp(-(x + 45.) ** 2 / delta)
-        + (x + 30.) * np.exp(-(x + 30.) ** 2 / delta)
-        + (x + 15.) * 0.85 * np.exp(-(x + 15.) ** 2 / delta)
-        + (x - 0.3) * 0.95 * np.exp(-(x - 0.3) ** 2 / delta)
-        + (x - 15.) * 0.85 * np.exp(-(x - 15.) ** 2 / delta)
-        + (x - 30.) * np.exp(-(x - 30.) ** 2 / delta)
-        + (x - 45.) * np.exp(-(x - 45.) ** 2 / delta)
+    return (-2 * height_asymmetric / delta) * (
+        + (x + 15.) * np.exp(-(x + 15.) ** 2 / delta)
+        + x * 0.70 * np.exp(-x ** 2 / delta)
+        + (x - 15.) * 0.30 * np.exp(-(x - 15.) ** 2 / delta)
     )
 
 
@@ -124,7 +119,7 @@ def diff_k(p):
     return p
 
 
-@njit(parallel=True)
+@njit
 def k(p):
     """
     Non-relativistic kinetic energy
@@ -145,6 +140,7 @@ def initial_trap(x):
 ########################################################################################################################
 # Declare parallel functions
 ########################################################################################################################
+
 
 def run_single_case(params):
     """
@@ -182,7 +178,10 @@ def run_single_case(params):
         dt=propagation_dt,
         epsilon=eps,
         **params
-    ).set_wavefunction(init_state)
+    )
+    gpe_propagator.set_wavefunction(
+        init_state * np.exp(1j * params['init_momentum_kick'] * gpe_propagator.x)
+    )
 
     # propagate till time T and for each time step save a probability density
     gpe_wavefunctions = [
@@ -201,7 +200,10 @@ def run_single_case(params):
         dt=propagation_dt,
         epsilon=eps,
         **params
-    ).set_wavefunction(init_state)
+    )
+    schrodinger_propagator.set_wavefunction(
+        init_state * np.exp(1j * params['init_momentum_kick'] * schrodinger_propagator.x)
+    )
 
     # Propagate till time T and for each time step save a probability density
     schrodinger_wavefunctions = [
@@ -216,7 +218,7 @@ def run_single_case(params):
         # bundle separately GPE data
         'gpe': {
             'wavefunctions': gpe_wavefunctions,
-            'extent': [gpe_propagator.pos_grid.min(), gpe_propagator.pos_grid.max(), 0., max(gpe_propagator.times)],
+            'extent': [gpe_propagator.x.min(), gpe_propagator.x.max(), 0., max(gpe_propagator.times)],
             'times': gpe_propagator.times,
 
             'x_average': gpe_propagator.x_average,
@@ -229,13 +231,14 @@ def run_single_case(params):
             'time_increments': gpe_propagator.time_increments,
 
             'dx': gpe_propagator.dx,
-            'x': gpe_propagator.pos_grid,
+            'x': gpe_propagator.x,
         },
 
         # bundle separately Schrodinger data
         'schrodinger': {
             'wavefunctions': schrodinger_wavefunctions,
-            'extent': [schrodinger_propagator.pos_grid.min(), schrodinger_propagator.pos_grid.max(), 0., max(schrodinger_propagator.times)],
+            'extent': [schrodinger_propagator.x.min(), schrodinger_propagator.x.max(),
+                       0., max(schrodinger_propagator.times)],
             'times': schrodinger_propagator.times,
 
             'x_average': schrodinger_propagator.x_average,
@@ -259,7 +262,7 @@ def run_single_case(params):
 
 if __name__ == '__main__':
 
-    # Redeclare final parameters for dictionary because it breaks for some reason if this isn't here
+    # Redeclare final parameters for dictionary because it breaks if this isn't here
     T = T
     times = times
     x_amplitude = x_amplitude
@@ -275,13 +278,14 @@ if __name__ == '__main__':
         diff_v=diff_v,
         diff_k=diff_k,
         times=times,
+        init_momentum_kick=kick,
     )
 
-    # copy to create parameters for the flipped case
-    sys_params_flipped = sys_params.copy()
-    # This is used to flip the initial trap about the offset
-    sys_params_flipped['initial_trap'] = njit(lambda x: initial_trap(-x))
+    sys_params_flipped = sys_params.copy()  # Copy to create parameters for the flipped case
 
+    # This is used to flip the initial trap about the offset and then kick it
+    sys_params_flipped['initial_trap'] = njit(lambda x: initial_trap(-x))
+    sys_params_flipped['init_momentum_kick'] = -sys_params_flipped['init_momentum_kick']
     ####################################################################################################################
     # Run calculations in parallel
     ####################################################################################################################
@@ -298,7 +302,7 @@ if __name__ == '__main__':
         qsys, qsys_flipped = pickle.load(f)
 
     ####################################################################################################################
-    # Plot the potential in physical units before proceeding with simulation
+    # Declare parameters for plotting and create archive file for better plotting
     ####################################################################################################################
 
     # Declare plotting specific terms
@@ -309,21 +313,19 @@ if __name__ == '__main__':
     x_cut = int(prob_region * size)                     # Use size parameter for Left-to-Right probability
     x_cut_flipped = int(prob_region_flipped * size)     # Use size parameter for Right-to-Left probability
 
+    # Create a text file to hold useful parameters
     outfilename = filename + ".txt"
     outpath = os.path.join(savespath, outfilename)
     out = open(outpath, "w")
     out.write(
         "Initial Parameters: \n"
-        + "trap_height = " + str(trap_height) + "\n"
         + "height_asymmetric = " + str(height_asymmetric) + "\n"
         + "v_0 = " + str(v_0) + "\n"
         + "cooling_offset = " + str(cooling_offset) + "\n"
         + "x_amplitude = " + str(x_amplitude) + "\n"
         + "x_grid_dim = " + str(x_grid_dim) + "\n"
-        + "propagation_dt = " + str(propagation_dt) + "\n"
+        + "Propagation dt = " + str(propagation_dt) + "\n"
         + "Epsilon = " + str(eps) + "\n"
-        + "Scale of g = " + str(scale) + "\n"
-        + "Time run for = " + str(T) + "seconds \n"
         + "Probability Regions: " + str(prob_region) + ' and flipped: ' + str(prob_region_flipped) + "\n"
     )
 
@@ -352,7 +354,7 @@ if __name__ == '__main__':
     plt.xlabel('$x$ (au) ')
     plt.ylabel('$V(x)$ (au)')
     plt.xlim(-x_amplitude, x_amplitude)
-    plt.savefig(savespath + 'Potential' + '.pdf')
+    plt.savefig(savespath + 'Potential' + '.png')
 
     ####################################################################################################################
     # Generate plots to test the propagation
@@ -380,7 +382,7 @@ if __name__ == '__main__':
             origin='lower',
             extent=extent,
             aspect=(extent[1] - extent[0]) / (extent[-1] - extent[-2]),
-            norm=SymLogNorm(vmin=1e-7, vmax=1., linthresh=1e-15)
+            norm=SymLogNorm(vmin=1e-15, vmax=1., linthresh=1e-15)
         )
         plt.xlabel('Coordinate $x$ (a.u.)')
         plt.ylabel('Time $t$ (a.u.)')
@@ -401,7 +403,7 @@ if __name__ == '__main__':
         plt.plot(time, UnivariateSpline(time, qsys_dict['x_average'], s=0).derivative()(time),
                  '-r', label='$d\\langle\\hat{x}\\rangle / dt$')
         plt.plot(time, qsys_dict['x_average_rhs'], '--b', label='$\\langle\\hat{p}\\rangle$')
-        plt.legend(loc='lower right')
+        plt.legend(loc='lower left')
         plt.ylabel('momentum')
         plt.xlabel('time $t$ (a.u.)')
 
@@ -411,7 +413,7 @@ if __name__ == '__main__':
         plt.plot(time, UnivariateSpline(time, qsys_dict['p_average'], s=0).derivative()(time),
                  '-r', label='$d\\langle\\hat{p}\\rangle / dt$')
         plt.plot(time, qsys_dict['p_average_rhs'], '--b', label='$\\langle -U\'(\\hat{x})\\rangle$')
-        plt.legend(loc='lower right')
+        plt.legend(loc='lower left')
         plt.ylabel('force')
         plt.xlabel('time $t$ (a.u.)')
 
@@ -442,7 +444,7 @@ if __name__ == '__main__':
         plt.ylabel('$dt$')
         plt.xlabel('Time Step')
         figefr.suptitle(plot_title)
-        plt.savefig(savespath + 'EFT_' + plot_title + '.pdf')
+        plt.savefig(savespath + 'EFT_' + plot_title + '.png')
 
         return figure_number
 
@@ -462,9 +464,9 @@ if __name__ == '__main__':
     # Analyze the Flipped GPE propagation
     fignum = analyze_propagation(qsys_flipped['gpe'], "Flipped GPE evolution", fignum)
 
-    ########################################################################################################################
+    ####################################################################################################################
     # Calculate and plot the transmission probability
-    ########################################################################################################################
+    ####################################################################################################################
 
     figTP = plt.figure(fignum, figsize=(18, 6))
     fignum += 1
@@ -497,10 +499,9 @@ if __name__ == '__main__':
     plt.legend(loc='upper left')
     plt.xlabel('Time $t$ (au)')
     plt.ylabel("Transmission Probability")
-    plt.savefig(savespath + 'Transmission Probability' + '.pdf')
+    plt.savefig(savespath + 'Transmission Probability' + '.png')
 
-    # Get current time to finish timing of program
-    End_time = datetime.datetime.now(pytz.timezone('US/Central'))
+    End_time = datetime.datetime.now(pytz.timezone('US/Central'))   # Get current time to finish timing of program
 
     # Print times for review
     print("Start time: {}:{}:{}".format(Start_time.hour, Start_time.minute, Start_time.second))

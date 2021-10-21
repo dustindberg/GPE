@@ -7,7 +7,7 @@ from multiprocessing import cpu_count
 
 import os
 
-threads = 2
+threads = 4
 os.environ["OMP_NUM_THREADS"] = '{}'.format(threads)
 os.environ['NUMEXPR_MAX_THREADS']='{}'.format(threads)
 os.environ['NUMEXPR_NUM_THREADS']='{}'.format(threads)
@@ -66,7 +66,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
     # parameters for FFT
     fft_params = {
         "flags": ('FFTW_MEASURE', 'FFTW_DESTROY_INPUT'),
-        "threads": cpu_count(),                                       #removed cpu_count from here
+        "threads": cpu_count(),     # removed cpu_count() from here and replaced with threads
         "planning_timelimit": 60,
     }
 

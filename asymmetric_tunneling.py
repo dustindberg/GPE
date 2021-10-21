@@ -71,7 +71,7 @@ delta = 5
 osc = 6
 
 @njit
-def v(x, t=0.):
+def v(x):#, t=0.):
     """
     Potential energy
     """
@@ -84,7 +84,7 @@ def v(x, t=0.):
     #Option 4
     #return 0.25 * x ** 2 + x ** 2 * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 @njit
-def diff_v(x, t=0.):
+def diff_v(x):#, t=0.):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
@@ -98,7 +98,7 @@ def diff_v(x, t=0.):
     #return 0.5 * x + (2. * x - 2. * (1. / delta) ** 2 * x ** 3) * height_asymmetric * np.exp(-(x / delta) ** 2) * (x < 0)
 
 @njit
-def diff_k(p, t=0.):
+def diff_k(p):#, t=0.):
     """
     the derivative of the kinetic energy for Ehrenfest theorem evaluation
     """
@@ -107,7 +107,7 @@ def diff_k(p, t=0.):
 
 
 @njit
-def k(p, t=0.):
+def k(p):#, t=0.):
     """
     Non-relativistic kinetic energy
     """
@@ -182,11 +182,11 @@ plt.show()
 ########################################################################################################################
 
 #parameters for trapping potential
-v_0 = 12.5
+v_0 = 0.5
 offset = 20.
 
 @njit
-def initial_trap(x, t=0):
+def initial_trap(x):#, t=0):
     """
     Trapping potential to get the initial state
     :param x:
@@ -216,7 +216,8 @@ init_state, mu = imag_time_gpe1D(
 )
 
 
-flipped_initial_trap = njit(lambda x, t: initial_trap(-x, t))
+# flipped_initial_trap = njit(lambda x, t: initial_trap(-x, t))
+flipped_initial_trap = njit(lambda x: initial_trap(-x))
 
 flipped_init_state, mu_flip = imag_time_gpe1D(
     v=flipped_initial_trap,
@@ -275,7 +276,7 @@ chem_potential = (2 * v_0) ** (1/3) * (3 * g / 8) ** (2/3)
 mu_nKelvin = mu * nK_ref                                              #Converts chemical potential to units of nanoKelvin
 g_units = g * nK_ref * specvol_mum * 2 * np.pi                        #Converts dimensionless
 
-rhs = tf_test(chem_potential, initial_trap(x), g)
+rhs = tf_test(mu, initial_trap(x), g)
 lhs = np.abs(init_state) ** 2
 
 #TF Approx plot
@@ -289,7 +290,7 @@ plt.savefig('Thomas-Fermi Approximation' + '.pdf')
 plt.show()
 
 #Flip the initial conditions
-rhs = tf_test(mu_flip, flipped_initial_trap(x, 0), g)
+rhs = tf_test(mu_flip, flipped_initial_trap(x), g)
 lhs = np.abs(flipped_init_state) ** 2
 
 #TF Approx plot flipped
@@ -320,7 +321,7 @@ def analyze_propagation(qsys, wavefunctions, title):
     plt.title(title)
     plot_title = title
     # plot the time dependent density
-    extent = [qsys.x.min(), qsys.x.max(), 0., T]
+    extent = [qsys.pos_grid.min(), qsys.pos_grid.max(), 0., T]
 
     plt.imshow(
         np.abs(wavefunctions) ** 2,
@@ -419,7 +420,7 @@ gpe_qsys = SplitOpGPE1D(
 gpe_qsys.set_wavefunction(init_state)
 
 # get time duration of 2 periods
-T = 2. * 2. * np.pi
+T = 0.5 # 2. * 2. * np.pi
 times = np.linspace(0, T, 500)
 t_msplot = times * time_ref
 # propagate till time T and for each time step save a probability density

@@ -318,7 +318,7 @@ def analyze_propagation(qsys, wavefunctions, title):
     plt.title(title)
     plot_title = title
     # plot the time dependent density
-    extent = [qsys.x.min(), qsys.x.max(), 0., T]
+    extent = [qsys.pos_grid.min(), qsys.pos_grid.max(), 0., T]
 
     plt.imshow(
         np.abs(wavefunctions) ** 2,

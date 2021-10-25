@@ -17,7 +17,7 @@ import os
 # Begin by loading the pickle file
 location = './Archive_Data/Paper_Collection/'
 method = 'Method1' # Input which method you are generating plots for
-identifier = 'Kick7,0_Sigma8,5_Height45,0_Vo0,5_T12,5' # Paste from pickle file
+identifier = 'REDO_Kick6,5_Sigma8,5_Height45,0_Vo0,5_T11,0' # Paste from pickle file
 foldername = identifier + '/'
 path = location + foldername
 filename = identifier + '.pickle'
@@ -52,8 +52,8 @@ eps = 5e-4
 sigma = 8.5
 delta = 2. * (sigma ** 2)
 # IMPORTANT: Check if you are using a time cutoff before plotting anything
-time_start = times [0]# Use times[0] if your simulation does not need trimming
-time_end = times[-1]  # Use times[-1] if your simulation does not need trimming
+time_start = 5.7 # Use times[0] if your simulation does not need trimming
+time_end = 10.55  # Use times[-1] if your simulation does not need trimming
 time_init = int((time_start/times[-1]) * len(times))
 time_cutoff = int((time_end / times[-1]) * len(times))
 
@@ -210,6 +210,7 @@ def plot_potential(fignum, potential, init_energy, position):
     x_line = [position[0],position[-1]]
     en_line = [init_energy, init_energy]
     plt.figure(fignum)
+    fignum += 1
     plt.plot(x_line, en_line, color='r')
     plt.plot(position, potential,color='k')
     #plt.plot(position, Energy_muKelvin(beam_1(position)), '--')
@@ -239,6 +240,7 @@ def plot_potential(fignum, potential, init_energy, position):
     plt.ylim(-5, potential.max()+50)
     plt.xlabel('$x$ ($\mu$m)')
     plt.ylabel('$V$ (nK)')
+    plt.tight_layout()
     plt.savefig(savespath + method + 'potential' + '.pdf')
     return fignum
 
@@ -261,11 +263,12 @@ def plot_density(fignum, wave_title, wave):
         origin='lower',
         extent=extent_units,
         aspect=aspect,
-        norm=SymLogNorm(vmin=1e-8, vmax=1., linthresh=1e-15)            # Note, work on Vmin param
+        norm=SymLogNorm(vmin=1e-8, vmax=1., linthresh=1e-15)
     )
     plt.xlabel('Position ($\mu$m)')
     plt.ylabel('Time (ms)')
     plt.colorbar()
+    plt.tight_layout()
     plt.savefig(savespath + method + title + '.pdf')
     return fignum
 
@@ -300,6 +303,7 @@ def plot_probability(fignum, wave_title, wave_l2r, wave_r2l, time):
     plt.xlim(time_start * ms_conv, time_end * ms_conv)
     plt.xlabel('Time (ms)')
     plt.ylabel("Tunnelling Probability")
+    plt.tight_layout()
     plt.savefig(savespath + method + title + '.pdf')
     return fignum
 
@@ -335,6 +339,7 @@ def plot_probability_logscale(fignum, wave_title, wave_l2r, wave_r2l, time):
     plt.xlim(time_start * ms_conv, time_end * ms_conv)
     plt.xlabel('Time (ms)')
     plt.ylabel("Log Scale Tunnelling Probability")
+    plt.tight_layout()
     plt.savefig(savespath + title + identifier + '.pdf')
     return fignum
 
@@ -361,6 +366,7 @@ def plot_relativediff(fignum, wave_title, wave_l2r, wave_r2l, time):
     )
     plt.xlabel('Time (ms)')
     plt.ylabel("$d_r$ %")
+    plt.tight_layout()
     plt.savefig(savespath + title + identifier + '.pdf')
     print(wave_title + 'Final Relative Probability Difference = ' +
           str(np.abs(T_L[-1] - T_R[-1])/((T_L[-1] + T_R[-1])/2)))
@@ -397,6 +403,7 @@ def plot_relativediff_compare(fignum, gpe_l2r, grp_r2l, schr_l2r, schr_r2l, time
     plt.xlabel('Time (ms)')
     plt.ylabel("$d_r$ %")
     plt.legend(loc='best')
+    plt.tight_layout()
     plt.savefig(savespath + title + identifier + '.pdf')
     return fignum
 
@@ -434,6 +441,7 @@ def plot_ThomasFermiTest(fignum, wave_title, position, mu, v, g, init_state, cen
     plt.xlabel('$x (\mu$m)')
     plt.ylabel('Density ($\mu$m)${}^{-3}$')
     plt.legend()
+    plt.tight_layout()
     plt.savefig(savespath + title + identifier + '.pdf')
 
     plt.figure(fignum)
@@ -444,15 +452,16 @@ def plot_ThomasFermiTest(fignum, wave_title, position, mu, v, g, init_state, cen
     lhs = (np.abs(init_state) ** 2) * dens_conv
     rhs = y * (y > 0) * dens_conv
     plt.semilogy(
-        x, lhs, label='GPE'
+        position, lhs, label='GPE'
     )
     plt.semilogy(
-        x, rhs, label='Thomas Fermi'
+        position, rhs, label='Thomas Fermi'
     )
     plt.xlim(center - 30, center + 30)
     plt.xlabel('$x (\mu$m)')
     plt.ylabel('Density ($\mu$m)^(-3)')
     plt.legend()
+    plt.tight_layout()
     plt.savefig(savespath + title + identifier + '.pdf')
 
 
@@ -468,23 +477,23 @@ def plot_ThomasFermiTest(fignum, wave_title, position, mu, v, g, init_state, cen
 
 # For plotting the potential
 fignum = plot_potential(fignum, Energy_nanoKelvin(v(x)), Energy_nanoKelvin(init_gs_energy), x_mum)
-## For plotting Density
-#fignum = plot_density(fignum, 'GPE Left to Right', gpe_l2r_wavefunction)
-#fignum = plot_density(fignum, 'GPE Right to Left', gpe_r2l_wavefunction)
-#fignum = plot_density(fignum, 'Schrodinger Left to Right', schr_l2r_wavefunction)
-#fignum = plot_density(fignum, 'Schrodinger Right to Left', schr_r2l_wavefunction)
-## For plotting tunnelling probability
-#fignum = plot_probability(fignum, 'GPE', gpe_l2r_wavefunction, gpe_r2l_wavefunction, t_ms)
-#fignum = plot_probability(fignum, 'Schrodinger', schr_l2r_wavefunction, schr_r2l_wavefunction, t_ms)
-## For plotting relative difference
-#fignum = plot_relativediff(fignum, 'GPE', gpe_l2r_wavefunction, gpe_r2l_wavefunction, t_ms)
-#fignum = plot_relativediff(fignum, 'Schrodinger', schr_l2r_wavefunction, schr_r2l_wavefunction, t_ms)
-#fignum  = plot_relativediff_compare(fignum, gpe_l2r_wavefunction, gpe_r2l_wavefunction, schr_l2r_wavefunction,
-#                                   schr_r2l_wavefunction, t_ms)
-## For plotting Thomas-Fermi Approximation test
-#fignum = plot_ThomasFermiTest(fignum, 'Thomas-Fermi Left to Right', x_mum, mu_l2r,
-#                              initial_trap(x, cooling_offset), g, init_state_l2r, -1*cooling_offset * L_xmum)
-#fignum = plot_ThomasFermiTest(fignum, 'Thomas-Fermi Right to Left', x_mum, mu_r2l_nK,
-#                             init_trap_right_nk, g * nK_conv, init_state_r2l, cooling_offset * L_xmum)
+# For plotting Density
+fignum = plot_density(fignum, 'GPE Left to Right', gpe_l2r_wavefunction)
+fignum = plot_density(fignum, 'GPE Right to Left', gpe_r2l_wavefunction)
+fignum = plot_density(fignum, 'Schrodinger Left to Right', schr_l2r_wavefunction)
+fignum = plot_density(fignum, 'Schrodinger Right to Left', schr_r2l_wavefunction)
+# For plotting tunnelling probability
+fignum = plot_probability(fignum, 'GPE', gpe_l2r_wavefunction, gpe_r2l_wavefunction, t_ms)
+fignum = plot_probability(fignum, 'Schrodinger', schr_l2r_wavefunction, schr_r2l_wavefunction, t_ms)
+# For plotting relative difference
+fignum = plot_relativediff(fignum, 'GPE', gpe_l2r_wavefunction, gpe_r2l_wavefunction, t_ms)
+fignum = plot_relativediff(fignum, 'Schrodinger', schr_l2r_wavefunction, schr_r2l_wavefunction, t_ms)
+fignum  = plot_relativediff_compare(fignum, gpe_l2r_wavefunction, gpe_r2l_wavefunction, schr_l2r_wavefunction,
+                                   schr_r2l_wavefunction, t_ms)
+# For plotting Thomas-Fermi Approximation test
+fignum = plot_ThomasFermiTest(fignum, 'Thomas-Fermi Left to Right', x_mum, mu_l2r,
+                              initial_trap(x, cooling_offset), g, init_state_l2r, -1 * cooling_offset * L_xmum)
+fignum = plot_ThomasFermiTest(fignum, 'Thomas-Fermi Right to Left', x_mum, mu_r2l_nK,
+                             init_trap_right_nk, g * nK_conv, init_state_r2l, cooling_offset * L_xmum)
 
 plt.show()

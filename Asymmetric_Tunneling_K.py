@@ -112,7 +112,7 @@ def k(p, t=0.):
 
 #Saves certain parameters as a separate bundle
 params = dict(
-    x_grid_dim=8 * 1024,    #for faster testing, change x_grid_dim to 8*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy.
+    x_grid_dim=2 * 1024,    #for faster testing, change x_grid_dim to 8*1024, for more accuracy, 32*1024. Experimenting shows 16 is the best blend of speed and accuracy.
     x_amplitude=x_amplitude,
     N=N,
     k=k,
@@ -341,7 +341,7 @@ def analyze_propagation(qsys, wavefunctions, title, fignum):
     plt.title(title)
     plot_title = title
     # plot the time dependent density
-    extent = [qsys.x.min(), qsys.x.max(), 0., T]
+    extent = [qsys.pos_grid.min(), qsys.pos_grid.max(), 0., T]
     plt.imshow(
         np.abs(wavefunctions) ** 2,
         # some plotting parameters

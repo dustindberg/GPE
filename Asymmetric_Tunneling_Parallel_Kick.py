@@ -37,7 +37,6 @@ omeg_y = 500 * 2 * np.pi                        # Harmonic oscillation in the y-
 omeg_z = 500 * 2 * np.pi                        # Harmonic oscillation in the z-axis in Hz
 omeg_cooling = 450 * 2 * np.pi                  # Harmonic oscillation for the trapping potential in Hz
 scale = 1.0                                     # Scaling factor for the interaction parameter
-kick = 7.0
 
 # Parameters calculated by Python
 L_x = np.sqrt(hbar / (m * omeg_x))              # Characteristic length in the x-direction in meters
@@ -60,6 +59,7 @@ def replace(str1):
 ########################################################################################################################
 # Parameters needed for transfer to graphing file
 ########################################################################################################################
+kick = 6.5                      # initial momentum kick
 propagation_dt = 3e-3           # dt for adaptive step
 eps = 5e-4                      # Error tolerance for adaptive step
 height_asymmetric = 45.         # Height parameter of asymmetric barrier
@@ -69,7 +69,7 @@ v_0 = 0.5                       # Coefficient for the trapping potential
 cooling_offset = 65.            # Center offset for cooling potential
 prob_region = 0.64              # For calculating probability
 prob_region_flipped = 0.36      # For calculating probability of the flipped case
-T = 12.5                        # Total time
+T = 11.0                        # Total time
 times = np.linspace(0, T, 500)  # Time grid
 x_amplitude = 150.              # Set the range for calculation
 x_grid_dim = 32 * 1024          # For faster testing: 8*1024, more accuracy: 32*1024, best blend: 16x32

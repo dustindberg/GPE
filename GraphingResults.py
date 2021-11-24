@@ -44,16 +44,16 @@ init_gs_energy = qsys['gpe']['hamiltonian_average'][0]
 # Factors which need to be checked, but aren't stored in pickle
 scale = 1.0
 trap_height = 400
-height_asymmetric = 45
+height_asymmetric = 45.0
 v_0 = 0.5
 cooling_offset = 65.0
 propagation_dt = 0.003
-eps = 5e-4
+eps = 0.0005
 sigma = 8.5
 delta = 2. * (sigma ** 2)
 # IMPORTANT: Check if you are using a time cutoff before plotting anything
-time_start = 5.7 # Use times[0] if your simulation does not need trimming
-time_end = 10.55  # Use times[-1] if your simulation does not need trimming
+time_start = times[0] # Use times[0] if your simulation does not need trimming
+time_end = times[-1]  # Use times[-1] if your simulation does not need trimming
 time_init = int((time_start/times[-1]) * len(times))
 time_cutoff = int((time_end / times[-1]) * len(times))
 
@@ -81,7 +81,7 @@ def v(x):
         + 0.30 * np.exp(-(x - 15.) ** 2 / delta)
     )
 
-    # method 2 potenial
+    ## method 2 potenial
     #return trap_height - height_asymmetric * (
     #    np.exp(-(x + 45.) ** 2 / delta)
     #    + np.exp(-(x + 30.) ** 2 / delta)
@@ -213,17 +213,17 @@ def plot_potential(fignum, potential, init_energy, position):
     fignum += 1
     plt.plot(x_line, en_line, color='r')
     plt.plot(position, potential,color='k')
-    #plt.plot(position, Energy_muKelvin(beam_1(position)), '--')
-    #plt.plot(position, Energy_muKelvin(beam_2(position)), '--')
-    #plt.plot(position, Energy_muKelvin(beam_3(position)), '--')
-    #plt.plot(position, Energy_muKelvin(beam_4(position)), '--')
-    #plt.plot(position, Energy_muKelvin(beam_5(position)), '--')
-    #plt.plot(position, Energy_muKelvin(beam_6(position)), '--')
-    #plt.plot(position, Energy_muKelvin(beam_7(position)), '--')
+    plt.plot(position, Energy_muKelvin(beam_1(x)), '--')
+    plt.plot(position, Energy_muKelvin(beam_2(x)), '--')
+    plt.plot(position, Energy_muKelvin(beam_3(x)), '--')
+    plt.plot(position, Energy_muKelvin(beam_4(x)), '--')
+    plt.plot(position, Energy_muKelvin(beam_5(x)), '--')
+    plt.plot(position, Energy_muKelvin(beam_6(x)), '--')
+    plt.plot(position, Energy_muKelvin(beam_7(x)), '--')
     plt.fill_between(
         position[x_cut:],
         potential[x_cut:],
-        potential.max()+50,
+        potential.max()+.50,
         facecolor="b",
             color='b',
         alpha=0.2
@@ -231,15 +231,15 @@ def plot_potential(fignum, potential, init_energy, position):
     plt.fill_between(
         position[:x_cut_flipped],
         potential[:x_cut_flipped],
-        potential.max()+50,
+        potential.max()+.50,
         facecolor="orange",
             color='orange',
         alpha=0.2
         )
     plt.xlim(position[0], position[-1])
-    plt.ylim(-5, potential.max()+50)
+    plt.ylim(-.05, potential.max()+.20)
     plt.xlabel('$x$ ($\mu$m)')
-    plt.ylabel('$V$ (nK)')
+    plt.ylabel('$V$ ($\mu$K)')
     plt.tight_layout()
     plt.savefig(savespath + method + 'potential' + '.pdf')
     return fignum
@@ -425,11 +425,13 @@ def plot_ThomasFermiTest(fignum, wave_title, position, mu, v, g, init_state, cen
     title = wave_title
     # plt.title(title)
     y = (mu - v) / g
-    lhs = (np.abs(init_state) ** 2) * dens_conv
-    lhs_norm = np.sum(lhs)
-    lhs /= lhs_norm * dx
-    rhs = y * (y > 0) * dens_conv
-    rhs_norm = np.sum(rhs) * dx
+    lhs = (np.abs(init_state) ** 2) / L_xmum
+    print('Pre-norm LHS density normalized to: ' + str(np.sum(lhs) * dx * L_xmum) + '\n')
+    lhs_norm = np.sum(lhs) * dx * L_xmum
+    lhs /= lhs_norm
+    rhs = y * (y > 0) / L_xmum
+    print('Pre-norm RHS density normalized to: ' + str(np.sum(rhs) * dx * L_xmum) + '\n')
+    rhs_norm = np.sum(rhs) * dx * L_xmum
     rhs /= rhs_norm
     plt.plot(
         position, lhs, label='GPE'
@@ -443,14 +445,17 @@ def plot_ThomasFermiTest(fignum, wave_title, position, mu, v, g, init_state, cen
     plt.legend()
     plt.tight_layout()
     plt.savefig(savespath + title + identifier + '.pdf')
+    print('RHS density normalized to: ' + str(np.sum(rhs) * dx * L_xmum) + '\n')
+    print('LHS density normalized to: ' + str(np.sum(lhs) * dx * L_xmum) + '\n')
+    print(mu)
 
     plt.figure(fignum)
     fignum+=1
     title = wave_title + '_LogScale'
     # plt.title(title)
     y = (mu - v) / g
-    lhs = (np.abs(init_state) ** 2) * dens_conv
-    rhs = y * (y > 0) * dens_conv
+    lhs = (np.abs(init_state) ** 2)
+    rhs = y * (y > 0)
     plt.semilogy(
         position, lhs, label='GPE'
     )
@@ -475,21 +480,21 @@ def plot_ThomasFermiTest(fignum, wave_title, position, mu, v, g, init_state, cen
 #
 ########################################################################################################################
 
-# For plotting the potential
-fignum = plot_potential(fignum, Energy_nanoKelvin(v(x)), Energy_nanoKelvin(init_gs_energy), x_mum)
-# For plotting Density
-fignum = plot_density(fignum, 'GPE Left to Right', gpe_l2r_wavefunction)
-fignum = plot_density(fignum, 'GPE Right to Left', gpe_r2l_wavefunction)
-fignum = plot_density(fignum, 'Schrodinger Left to Right', schr_l2r_wavefunction)
-fignum = plot_density(fignum, 'Schrodinger Right to Left', schr_r2l_wavefunction)
-# For plotting tunnelling probability
-fignum = plot_probability(fignum, 'GPE', gpe_l2r_wavefunction, gpe_r2l_wavefunction, t_ms)
-fignum = plot_probability(fignum, 'Schrodinger', schr_l2r_wavefunction, schr_r2l_wavefunction, t_ms)
-# For plotting relative difference
-fignum = plot_relativediff(fignum, 'GPE', gpe_l2r_wavefunction, gpe_r2l_wavefunction, t_ms)
-fignum = plot_relativediff(fignum, 'Schrodinger', schr_l2r_wavefunction, schr_r2l_wavefunction, t_ms)
-fignum  = plot_relativediff_compare(fignum, gpe_l2r_wavefunction, gpe_r2l_wavefunction, schr_l2r_wavefunction,
-                                   schr_r2l_wavefunction, t_ms)
+## For plotting the potential
+#fignum = plot_potential(fignum, Energy_muKelvin(v(x)), Energy_muKelvin(init_gs_energy), x_mum)
+## For plotting Density
+#fignum = plot_density(fignum, 'GPE Left to Right', gpe_l2r_wavefunction)
+#fignum = plot_density(fignum, 'GPE Right to Left', gpe_r2l_wavefunction)
+#fignum = plot_density(fignum, 'Schrodinger Left to Right', schr_l2r_wavefunction)
+#fignum = plot_density(fignum, 'Schrodinger Right to Left', schr_r2l_wavefunction)
+## For plotting tunnelling probability
+#fignum = plot_probability(fignum, 'GPE', gpe_l2r_wavefunction, gpe_r2l_wavefunction, t_ms)
+#fignum = plot_probability(fignum, 'Schrodinger', schr_l2r_wavefunction, schr_r2l_wavefunction, t_ms)
+## For plotting relative difference
+#fignum = plot_relativediff(fignum, 'GPE', gpe_l2r_wavefunction, gpe_r2l_wavefunction, t_ms)
+#fignum = plot_relativediff(fignum, 'Schrodinger', schr_l2r_wavefunction, schr_r2l_wavefunction, t_ms)
+#fignum  = plot_relativediff_compare(fignum, gpe_l2r_wavefunction, gpe_r2l_wavefunction, schr_l2r_wavefunction,
+#                                   schr_r2l_wavefunction, t_ms)
 # For plotting Thomas-Fermi Approximation test
 fignum = plot_ThomasFermiTest(fignum, 'Thomas-Fermi Left to Right', x_mum, mu_l2r,
                               initial_trap(x, cooling_offset), g, init_state_l2r, -1 * cooling_offset * L_xmum)

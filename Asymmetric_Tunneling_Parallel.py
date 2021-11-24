@@ -216,7 +216,7 @@ def run_single_case(params):
         # bundle separately GPE data
         'gpe': {
             'wavefunctions': gpe_wavefunctions,
-            'extent': [gpe_propagator.pos_grid.min(), gpe_propagator.pos_grid.max(), 0., max(gpe_propagator.times)],
+            'extent': [gpe_propagator.x.min(), gpe_propagator.x.max(), 0., max(gpe_propagator.times)],
             'times': gpe_propagator.times,
 
             'x_average': gpe_propagator.x_average,
@@ -235,7 +235,7 @@ def run_single_case(params):
         # bundle separately Schrodinger data
         'schrodinger': {
             'wavefunctions': schrodinger_wavefunctions,
-            'extent': [schrodinger_propagator.pos_grid.min(), schrodinger_propagator.pos_grid.max(), 0., max(schrodinger_propagator.times)],
+            'extent': [schrodinger_propagator.x.min(), schrodinger_propagator.x.max(), 0., max(schrodinger_propagator.times)],
             'times': schrodinger_propagator.times,
 
             'x_average': schrodinger_propagator.x_average,

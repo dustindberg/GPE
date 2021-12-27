@@ -61,7 +61,7 @@ trap_height = 400.              # Used for trap height
 sigma = 8.5                     # Width parameter for gaussian
 delta = 2. * (sigma ** 2)       # Width parameter for realistic barrier
 v_0 = 0.5                       # Coefficient for the trapping potential (was 10 for paper run)
-cooling_offset = 37.0           # Center offset for cooling potential
+cooling_offset = 36.5 # 37.0          # Center offset for cooling potential
 prob_region = 0.7               # For calculating probability
 prob_region_flipped = 0.3       # For calculating probability of the flipped case
 T = 40.0                        # Total time
@@ -229,7 +229,7 @@ def run_single_case(params):
             'time_increments': gpe_propagator.time_increments,
 
             'dx': gpe_propagator.dx,
-            'x': gpe_propagator.pos_grid,
+            'x': gpe_propagator.x,
         },
 
         # bundle separately Schrodinger data
@@ -332,7 +332,7 @@ if __name__ == '__main__':
     plt.title('Potential')
     potential = v(pos_grid)
     plt.plot(pos_grid, potential, color='k')
-    plt.hlines((qsys['gpe']['hamiltonian_average'][0]), pos_grid.min(), pos_grid.max(), colors='r')
+    plt.hlines((qsys['schrodinger']['hamiltonian_average'][0]), pos_grid.min(), pos_grid.max(), colors='r')
     plt.fill_between(
         pos_grid[x_cut:],
         potential[x_cut:],

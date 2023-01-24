@@ -62,41 +62,54 @@ def replace(str1):
 kick = 6.5                      # initial momentum kick
 propagation_dt = 3e-3           # dt for adaptive step
 eps = 5e-4                      # Error tolerance for adaptive step
-height_asymmetric = 45.         # Height parameter of asymmetric barrier
+height_asymmetric = 46.         # Height parameter of asymmetric barrier
 sigma = 8.5                     # For estimating realistic barrier configurations
 delta = 2. * (sigma ** 2)       # Width parameter for realistic barrier
 v_0 = 0.5                       # Coefficient for the trapping potential
 cooling_offset = 65.            # Center offset for cooling potential
-prob_region = 0.64              # For calculating probability
-prob_region_flipped = 0.36      # For calculating probability of the flipped case
-T = 11.0                        # Total time
+prob_region = 0.63              # For calculating probability
+prob_region_flipped = 1 - prob_region   # For calculating probability of the flipped case
+T = 10.5                        # Total time
 times = np.linspace(0, T, 500)  # Time grid
 x_amplitude = 150.              # Set the range for calculation
 x_grid_dim = 32 * 1024          # For faster testing: 8*1024, more accuracy: 32*1024, best blend: 16x32
+vp = 1.0
 
 # Create a tag using date and time to save and archive data
-filename = 'REDO_Kick' + replace(str(kick)) + '_Sigma' + replace(str(sigma)) \
-           + '_Height' + replace(str(height_asymmetric)) + '_Vo' + replace(str(v_0)) + '_T' + replace(str(T))
-savesfolder = filename
-parent_dir = "/home/skref/PycharmProjects/GPE/Archive_Data"
-path = os.path.join(parent_dir, savesfolder)
+parameter_tag = str(vp)
+if len(parameter_tag) > 4:
+    # This is used as a backup in case the round function fails.
+    parameter_tag = str(round(vp * 100) / 100)
+if len(parameter_tag) < 4:
+    parameter_tag += '0'
+unique_identifier = 'Potential_Asymmetry'
+filename = unique_identifier + '_' + replace(parameter_tag)
+parent_dir = "./Archive_Data/" + unique_identifier + "/"
+path = os.path.join(parent_dir, filename)
 os.mkdir(path)
-savespath = 'Archive_Data/' + str(savesfolder) + '/'
+savespath = parent_dir + str(filename) + '/'
 
-print("Directory '%s' created" % savesfolder)
+print("Directory '%s' created" % filename)
+
+savesfolder = filename
 
 
-# Functions for computation
+def getnormv(x):
+    """
+    Gets the normalization factor so the potential can be calculated in parallel and eta's value can be obtained
+    """
+    init_potential = np.exp(-(x + sigma) ** 2 / delta) + (1 - vp) * np.exp(-(x - sigma) ** 2 / delta)
+    return height_asymmetric / init_potential.max()
+
+
 @njit(parallel=True)
 def v(x):
     """
     Potential energy
     """
-    return height_asymmetric * (
-        np.exp(-(x + 15.) ** 2 / delta)
-        + 0.70 * np.exp(-x ** 2 / delta)
-        + 0.30 * np.exp(-(x - 15.) ** 2 / delta)
-    )
+    init_potential = np.exp(-(x + sigma) ** 2 / delta) + (1 - vp) * np.exp(-(x - sigma) ** 2 / delta)
+    init_potential *= height_asymmetric / init_potential.max()
+    return init_potential
 
 
 @njit(parallel=True)
@@ -104,11 +117,12 @@ def diff_v(x):
     """
     the derivative of the potential energy for Ehrenfest theorem evaluation
     """
-    return (-2 * height_asymmetric / delta) * (
-        + (x + 15.) * np.exp(-(x + 15.) ** 2 / delta)
-        + x * 0.70 * np.exp(-x ** 2 / delta)
-        + (x - 15.) * 0.30 * np.exp(-(x - 15.) ** 2 / delta)
-    )
+    init_potential = np.exp(-(x + sigma) ** 2 / delta) + (1 - vp) * np.exp(-(x - sigma) ** 2 / delta)
+    new_height = height_asymmetric / init_potential.max()
+    return (-2 * new_height / delta) * (
+            (x + sigma) * np.exp(-(x + sigma) ** 2 / delta)
+            + (x - sigma) * (1 - vp) * np.exp(-(x - sigma) ** 2 / delta))
+
 
 
 @njit
@@ -192,23 +206,23 @@ def run_single_case(params):
     # Propagate Schrodinger equation
     ####################################################################################################################
 
-    print("\nPropagate Schrodinger equation")
-
-    schrodinger_propagator = SplitOpGPE1D(
-        v=v,
-        g=0.,
-        dt=propagation_dt,
-        epsilon=eps,
-        **params
-    )
-    schrodinger_propagator.set_wavefunction(
-        init_state * np.exp(1j * params['init_momentum_kick'] * schrodinger_propagator.x)
-    )
-
-    # Propagate till time T and for each time step save a probability density
-    schrodinger_wavefunctions = [
-        schrodinger_propagator.propagate(t).copy() for t in params['times']
-    ]
+    #print("\nPropagate Schrodinger equation")
+    #
+    #schrodinger_propagator = SplitOpGPE1D(
+    #    v=v,
+    #    g=0.,
+    #    dt=propagation_dt,
+    #    epsilon=eps,
+    #    **params
+    #)
+    #schrodinger_propagator.set_wavefunction(
+    #    init_state * np.exp(1j * params['init_momentum_kick'] * schrodinger_propagator.x)
+    #)
+    #
+    ## Propagate till time T and for each time step save a probability density
+    #schrodinger_wavefunctions = [
+    #    schrodinger_propagator.propagate(t).copy() for t in params['times']
+    #]
 
     # bundle results into a dictionary
     return {
@@ -234,22 +248,22 @@ def run_single_case(params):
             'x': gpe_propagator.x,
         },
 
-        # bundle separately Schrodinger data
-        'schrodinger': {
-            'wavefunctions': schrodinger_wavefunctions,
-            'extent': [schrodinger_propagator.x.min(), schrodinger_propagator.x.max(),
-                       0., max(schrodinger_propagator.times)],
-            'times': schrodinger_propagator.times,
+        ## bundle separately Schrodinger data
+        #'schrodinger': {
+        #    'wavefunctions': schrodinger_wavefunctions,
+        #    'extent': [schrodinger_propagator.x.min(), schrodinger_propagator.x.max(),
+        #               0., max(schrodinger_propagator.times)],
+        #    'times': schrodinger_propagator.times,
 
-            'x_average': schrodinger_propagator.x_average,
-            'x_average_rhs': schrodinger_propagator.x_average_rhs,
+        #    'x_average': schrodinger_propagator.x_average,
+        #    'x_average_rhs': schrodinger_propagator.x_average_rhs,
 
-            'p_average': schrodinger_propagator.p_average,
-            'p_average_rhs': schrodinger_propagator.p_average_rhs,
-            'hamiltonian_average': schrodinger_propagator.hamiltonian_average,
+        #    'p_average': schrodinger_propagator.p_average,
+        #    'p_average_rhs': schrodinger_propagator.p_average_rhs,
+        #    'hamiltonian_average': schrodinger_propagator.hamiltonian_average,
 
-            'time_increments': schrodinger_propagator.time_increments,
-        },
+        #    'time_increments': schrodinger_propagator.time_increments,
+        #},
 
         # collect parameters for export
         'parameters': params
@@ -291,7 +305,7 @@ if __name__ == '__main__':
     ####################################################################################################################
 
     # Get the unflip and flip simulations run in parallel;
-    with Pool() as pool:
+    with Pool(processes=4) as pool:
         qsys, qsys_flipped = pool.map(run_single_case, [sys_params, sys_params_flipped])
         # Results will be saved in qsys and qsys_flipped, respectively
 
@@ -453,10 +467,10 @@ if __name__ == '__main__':
     ####################################################################################################################
 
     # Analyze the schrodinger propagation
-    fignum = analyze_propagation(qsys['schrodinger'], "Schrodinger evolution", fignum)
+    #fignum = analyze_propagation(qsys['schrodinger'], "Schrodinger evolution", fignum)
 
     # Analyze the Flipped schrodinger propagation
-    fignum = analyze_propagation(qsys_flipped['schrodinger'], "Flipped Schrodinger evolution", fignum)
+    #fignum = analyze_propagation(qsys_flipped['schrodinger'], "Flipped Schrodinger evolution", fignum)
 
     # Analyze the GPE propagation
     fignum = analyze_propagation(qsys['gpe'], "GPE evolution", fignum)
@@ -468,24 +482,24 @@ if __name__ == '__main__':
     # Calculate and plot the transmission probability
     ####################################################################################################################
 
-    figTP = plt.figure(fignum, figsize=(18, 6))
+    figTP = plt.figure(fignum, figsize=(9, 6))
     fignum += 1
-    plt.subplot(121)
-    plt.plot(
-        times,
-        np.sum(np.abs(qsys['schrodinger']['wavefunctions'])[:, x_cut:] ** 2, axis=1) * dx,
-        label='Schrodinger'
-    )
-    plt.plot(
-        times,
-        np.sum(np.abs(qsys_flipped['schrodinger']['wavefunctions'])[:, :x_cut_flipped] ** 2, axis=1) * dx,
-        label='Flipped Schrodinger'
-    )
-    plt.legend(loc='upper left')
-    plt.xlabel('time $t$ (au)')
-    plt.ylabel("transmission probability")
-
-    plt.subplot(122)
+    #plt.subplot(121)
+    #plt.plot(
+    #    times,
+    #    np.sum(np.abs(qsys['schrodinger']['wavefunctions'])[:, x_cut:] ** 2, axis=1) * dx,
+    #    label='Schrodinger'
+    #)
+    #plt.plot(
+    #    times,
+    #    np.sum(np.abs(qsys_flipped['schrodinger']['wavefunctions'])[:, :x_cut_flipped] ** 2, axis=1) * dx,
+    #    label='Flipped Schrodinger'
+    #)
+    #plt.legend(loc='upper left')
+    #plt.xlabel('time $t$ (au)')
+    #plt.ylabel("transmission probability")
+    #
+    #plt.subplot(122)
     plt.plot(
         times,
         np.sum(np.abs(qsys['gpe']['wavefunctions'])[:, x_cut:] ** 2, axis=1) * dx,

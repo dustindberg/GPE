@@ -12,14 +12,14 @@ from multiprocessing import Pool
 import os
 
 
-scale = 0.46
+scale = 0.01
 fignum = 1
-for s in range(0,4):
-    Start_time = datetime.datetime.now(pytz.timezone('US/Central')) # Start timing for optimizing runs
+for s in range(0, 1):
+    Start_time = datetime.datetime.now(pytz.timezone('US/Central'))     # Start timing for optimizing runs
 
-    ########################################################################################################################
+    ####################################################################################################################
     # Define the initial parameters for interaction and potential
-    ########################################################################################################################
+    ####################################################################################################################
 
     scale = round(scale*100)/100
     # Define physical parameters
@@ -27,7 +27,7 @@ for s in range(0,4):
 
     # Rubidium-87 properties
     m = 1.4431609e-25                                 # Calculated mass of 87Rb in kg
-    a_s = 75 * a_0                                   # Background scattering length of 87Rb in meters
+    a_s = 100 * a_0                                   # Background scattering length of 87Rb in meters
 
     # Potassium-41 properties
     # m= 6.80187119e-26                                # Calculated mass of 41K in kg
@@ -46,7 +46,7 @@ for s in range(0,4):
     L_y = np.sqrt(hbar / (m * omeg_y))                # Characteristic length in the y-direction in meters
     L_z = np.sqrt(hbar / (m * omeg_z))                # Characteristic length in the z-direction in meters
     # Dimensionless interaction parameter
-    g = 2 * N * L_x * m * scale * a_s * np.sqrt(omeg_y * omeg_z) / hbar
+    g = scale   # 2 * N * L_x * m * scale * a_s * np.sqrt(omeg_y * omeg_z) / hbar
 
     # Conversion factors to plot in physical units
     L_xmum = np.sqrt(hbar / (m * omeg_x)) * 1e6       # Characteristic length in the x-direction in meters
@@ -60,15 +60,20 @@ for s in range(0,4):
     dens_conv = 1. / (L_xmum * L_ymum * L_zmum)       # Calculated version of density unit conversion
 
     # Parameters for computation
-    propagation_dt = 3e-3
-    eps = 0.005
-    height_asymmetric = 300.                           # Height parameter of asymmetric barrier
-    sigma = 1.5
-    delta = 2. * (sigma ** 2)
-    v_0 = 0.5                                         # Coefficient for the trapping potential
-    peak_offset = sigma*np.sqrt(2*np.log(2))           # 0.5*FWHM = sigma*sqrt(2log(2))
-    cooling_offset = 50.                              # Center offset for cooling potential
-    kick = 22.
+    propagation_dt = 3e-5  # dt for adaptive step
+    eps = 5e-4  # Error tolerance for adaptive step
+    height_asymmetric = 285  # Height parameter of asymmetric barrier
+    trap_height = 400.  # Used for trap height
+    sigma = 8.5  # Width parameter for gaussian
+    delta = 2. * (sigma ** 2)  # Width parameter for realistic barrier
+    v_0 = 0.5  # Coefficient for the trapping potential (was 10 for paper run)
+    cooling_offset = 37.0 # 37.0          # Center offset for cooling potential
+    prob_region = 0.7  # For calculating probability
+    prob_region_flipped = 0.3  # For calculating probability of the flipped case
+    T = 25.0  # Total time
+    times = np.linspace(0, T, 500)  # Time grid
+    x_amplitude = 80.  # Set the range for calculation
+    #x_grid_dim = 32 * 1024  # For faster testing: 8*1024, more accuracy: 32*1024, best blend: 16x32
 
     # Create a tag using date and time to save and archive data
     def Replace(str1):
@@ -78,15 +83,15 @@ for s in range(0,4):
     if len(scalestr) > 4:
         scalestr = str(round(scale*100)/100)
     if len(scalestr) < 4:
-        scalestr+='0'
+        scalestr += '0'
     scale_tag = Replace(scalestr)
-    tag = 'GPE_Diode_Kick' + str(kick) + '_Delta' + str(delta) + '_Gscale' + scalestr + '_Height' + str(height_asymmetric)+'_Eps' +str(eps)
+    tag = 'GPE_G' + scalestr
     filename = Replace(tag)
     savesfolder = filename
-    parent_dir = "/home/skref/PycharmProjects/GPE/Archive_Data/Diode_Runs_Small/"
+    parent_dir = "/home/dustin/PycharmProjects/GPE/Archive_Data/PerturbationTesting/"
     path = os.path.join(parent_dir, savesfolder)
     os.mkdir(path)
-    savespath = 'Archive_Data/Diode_Runs_Small/' + str(savesfolder) + '/'
+    savespath = 'Archive_Data/PerturbationTesting/' + str(savesfolder) + '/'
 
     print("Directory '%s' created" % savesfolder)
 
@@ -97,17 +102,14 @@ for s in range(0,4):
         """
         Potential energy
         """
-        return height_asymmetric * (
-            np.exp(-(x + 8.5 * peak_offset) ** 2 / delta)
-            + 0.80 * np.exp(-(x + 7.0 * peak_offset) ** 2 / delta)
-            + 0.60 * np.exp(-(x + 5.5 * peak_offset) ** 2 / delta)
-            + 0.40 * np.exp(-(x + 4.0 * peak_offset) ** 2 / delta)
-            + 0.20 * np.exp(-(x + 2.5 * peak_offset) ** 2 / delta)
-            + 1.00 * np.exp(-(x - 2.5 * peak_offset) ** 2 / delta)
-            + 0.80 * np.exp(-(x - 4.0 * peak_offset) ** 2 / delta)
-            + 0.60 * np.exp(-(x - 5.5 * peak_offset) ** 2 / delta)
-            + 0.40 * np.exp(-(x - 7.0 * peak_offset) ** 2 / delta)
-            + 0.20 * np.exp(-(x - 8.5 * peak_offset) ** 2 / delta)
+        return trap_height - height_asymmetric * (
+                np.exp(-(x + 45.) ** 2 / delta)
+                + np.exp(-(x + 30.) ** 2 / delta)
+                + 0.85 * np.exp(-(x + 15.) ** 2 / delta)
+                + 0.95 * np.exp(-(x - 0.3) ** 2 / delta)
+                + 0.85 * np.exp(-(x - 15.) ** 2 / delta)
+                + np.exp(-(x - 30.) ** 2 / delta)
+                + np.exp(-(x - 45.) ** 2 / delta)
         )
 
 
@@ -117,17 +119,14 @@ for s in range(0,4):
         """
         the derivative of the potential energy for Ehrenfest theorem evaluation
         """
-        return (-2 * height_asymmetric / delta) * (
-            (x + 8.5 * peak_offset) * np.exp(-(x + 8.5 * peak_offset) ** 2 / delta)
-            + (x + 7.0 * peak_offset) * 0.80 * np.exp(-(x + 7.0 * peak_offset) ** 2 / delta)
-            + (x + 5.5 * peak_offset) * 0.60 * np.exp(-(x + 5.5 * peak_offset) ** 2 / delta)
-            + (x + 4.0 * peak_offset) * 0.40 * np.exp(-(x + 4.0 * peak_offset) ** 2 / delta)
-            + (x + 2.5 * peak_offset) * 0.20 * np.exp(-(x + 2.5 * peak_offset) ** 2 / delta)
-            + (x - 2.5 * peak_offset) * 1.00 * np.exp(-(x - 2.5 * peak_offset) ** 2 / delta)
-            + (x - 4.0 * peak_offset) * 0.80 * np.exp(-(x - 4.0 * peak_offset) ** 2 / delta)
-            + (x - 5.5 * peak_offset) * 0.60 * np.exp(-(x - 5.5 * peak_offset) ** 2 / delta)
-            + (x - 7.0 * peak_offset) * 0.40 * np.exp(-(x - 7.0 * peak_offset) ** 2 / delta)
-            + (x - 8.5 * peak_offset) * 0.20 * np.exp(-(x - 8.5 * peak_offset) ** 2 / delta)
+        return (2 * height_asymmetric / delta) * (
+                (x + 45.) * np.exp(-(x + 45.) ** 2 / delta)
+                + (x + 30.) * np.exp(-(x + 30.) ** 2 / delta)
+                + (x + 15.) * 0.85 * np.exp(-(x + 15.) ** 2 / delta)
+                + (x - 0.3) * 0.95 * np.exp(-(x - 0.3) ** 2 / delta)
+                + (x - 15.) * 0.85 * np.exp(-(x - 15.) ** 2 / delta)
+                + (x - 30.) * np.exp(-(x - 30.) ** 2 / delta)
+                + (x - 45.) * np.exp(-(x - 45.) ** 2 / delta)
         )
 
     @njit
@@ -191,12 +190,12 @@ for s in range(0,4):
             v=v,
             g=g,
             dt=propagation_dt,
-            epsilon = eps,
+            epsilon=eps,
             **params
         )
-        gpe_propagator.set_wavefunction(
-            init_state * np.exp(1j * params['init_momentum_kick'] * gpe_propagator.x)
-        )
+        #gpe_propagator.set_wavefunction(
+        #    init_state * np.exp(1j * params['init_momentum_kick'] * gpe_propagator.x)
+        #)
 
         # propagate till time T and for each time step save a probability density
         gpe_wavefunctions = [
@@ -237,20 +236,20 @@ for s in range(0,4):
 
         # Declare final parameters for dictionary
         # T = 2. * np.pi      # Time length of two periods
-        T = 3.5
-        times = np.linspace(0, T, 500)
+        T = T
+        times = times
         t_ms = np.array(times) * time_conv
-        x_amplitude = 100.              # Set the range for calculation
+        x_amplitude = x_amplitude             # Set the range for calculation
         x_grid_dim = 16 * 1024
         # For faster testing: 8*1024, more accuracy: 32*1024, best blend of speed and accuracy: 16x32
 
 
-        @njit
-        def abs_boundary(x):
-            """
-            Absorbing boundary similar to the Blackman filter
-            """
-            return np.sin(0.5 * np.pi * (x + x_amplitude) / x_amplitude) ** 0.0025 # 0.00011
+        #@njit
+        #def abs_boundary(x):
+        #    """
+        #    Absorbing boundary similar to the Blackman filter
+        #    """
+        #    return np.sin(0.5 * np.pi * (x + x_amplitude) / x_amplitude) ** 0.0025 # 0.00011
 
 
         # save parameters as a separate bundle
@@ -263,15 +262,13 @@ for s in range(0,4):
             diff_v=diff_v,
             diff_k=diff_k,
             times=times,
-            # abs_boundary=abs_boundary,
-            init_momentum_kick=kick,
         )
 
         #copy to create parameters for the flipped case
         sys_params_flipped = sys_params.copy()
         #This is used to flip the initial trap about the offset
         sys_params_flipped['initial_trap'] = njit(lambda x: initial_trap(-x)) # , t: initial_trap(-x, t))
-        sys_params_flipped['init_momentum_kick'] = -sys_params_flipped['init_momentum_kick']
+        #sys_params_flipped['init_momentum_kick'] = -sys_params_flipped['init_momentum_kick']
 
         ####################################################################################################################
         # Run calculations in parallel
@@ -298,8 +295,8 @@ for s in range(0,4):
         dx = qsys['gpe']['dx']
         size = qsys['gpe']['x'].size
         # These are cuts such that we observe the behavior about the initial location of the wave
-        x_cut = int(0.605 * size)
-        x_cut_flipped = int(0.395 * size)
+        x_cut = int(0.7 * size)  # int(0.605 * size)
+        x_cut_flipped = int(0.3 * size)  # int(0.395 * size)
 
 
         # Create a file to hold parameters
@@ -467,7 +464,7 @@ for s in range(0,4):
         # Calculate and plot the transmission probability
         ####################################################################################################################
 
-        figTP = plt.figure(fignum,figsize=(18,6))
+        figTP = plt.figure(fignum, figsize=(18, 6))
         fignum += 1
         plt.subplot(121)
         plt.title('Transmission Probability Log Scale')
@@ -504,7 +501,7 @@ for s in range(0,4):
         plt.ylabel("Transmission Probability")
         plt.savefig(savespath + 'Transmission Probability' + '.png')
 
-        End_time = datetime.datetime.now(pytz.timezone('US/Central'))       # Get current time to finish timing of program
+        End_time = datetime.datetime.now(pytz.timezone('US/Central'))   # Get current time to finish timing of program
 
         # Print times for review
         print ("Start time: {}:{}:{}".format(Start_time.hour,Start_time.minute,Start_time.second))
@@ -517,5 +514,5 @@ for s in range(0,4):
         f.close()
     print("\n SCALE: " + scale_tag + " COMPLETED \n")
     plt.close('all')
-    scale+=0.01
+    scale += 0.1
 

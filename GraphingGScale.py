@@ -66,6 +66,9 @@ Tprob = []
 L2R_TP = []
 R2L_TP = []
 
+Energy_list = []
+Init_Energy_list = []
+
 fignum = 1                      # Declare starting figure number
 
 T = 3.5
@@ -114,13 +117,14 @@ scale = start_scale
 
 scale = start_scale
 # Plot the fine points
-for j in range(0,100):
+for j in range(0, 100):
     strscale = str(scale)
     if len(strscale) > 4:
         strscale = str(round(scale*100)/100)
     if len(strscale) < 4:
         strscale += '0'
-    tag = 'GPE_Diode_Kick' + str(kick) + '_Delta' + str(delta) + '_Gscale' + strscale + '_Height' + str(height_asymmetric) + '_Eps0,005'
+    tag = 'GPE_Diode_Kick' + str(kick) + '_Delta' + str(delta) + '_Gscale' + strscale\
+          + '_Height' + str(height_asymmetric) + '_Eps0,005'
     filename = Replace(tag)
     path = os.path.join(parent_dir, filename)
     with open(path + '/' + filename + ".pickle", "rb") as f:
@@ -139,13 +143,15 @@ for j in range(0,100):
     Tnormdiff_fine.append(normdiff_last)
     L2R_TP.append(tprob_last)
     R2L_TP.append(tprob_last_flipped)
-    Glist_fine.append(scale*100)# (scale*(a_s*10**9))
-    Glist_last_fine.append(scale*100)#*a_s)
+    Glist_fine.append(scale*100) #*a_s*10**9))
+    Glist_last_fine.append(scale*100) #*a_s)
+    Energy_list.append(np.average(qsys['gpe']['hamiltonian_average'])*muK_conv)
+    Init_Energy_list.append(qsys['gpe']['hamiltonian_average'][0]*muK_conv)
     Tprob.append(normdiff_last / ((tprob_last + tprob_last_flipped)/2))
     if scale < 0.50:
-        scale+=0.01
+        scale += 0.01
     else:
-     scale += 0.05
+        scale += 0.05
 
 
 ########################################################################################################################
@@ -160,15 +166,43 @@ plt_params = {'legend.fontsize': 'x-large',
         'xtick.labelsize':'x-large',
         'ytick.labelsize':'x-large'}
 plt.rcParams.update(plt_params)
+L2R_TP = np.array(L2R_TP)
+R2L_TP = np.array(R2L_TP)
+Energy_list = np.array(Energy_list)
 
 figTPnorm = plt.figure(fignum)
+fignum += 1
 #plt.plot(Glist, Tnormdiff, label='integer step')
 #plt.title('Effect of Feshbach Resonance on Asymmetry')
 #plt.plot(Glist_fine, Tnormdiff_fine, '-*', label='0.05 step')
 plt.plot(Glist_fine, L2R_TP, '-*', label='Left to Right Tunneling')
 plt.plot(Glist_fine, R2L_TP, '-*', label='Right to Left Tunneling')
 #plt.plot(Glist_last_fine, Tprob)
-plt.xlabel('$a_s$ $(a_b)$')
+plt.xlabel('$a_s (a_0)$')
 plt.ylabel('Tunnelling Probability at Final Time')
 plt.legend(loc='best')
+
+figTPbyEnergy = plt.figure(fignum)
+fignum += 1
+plt.plot(Glist_fine, (L2R_TP/Energy_list), '-*', label='Left to Right Tunneling')
+plt.plot(Glist_fine, (R2L_TP/Energy_list), '-*', label='Right to Left Tunneling')
+plt.xlabel('$a_s$ $(a_0)$')
+plt.ylabel('Tunnelling Probability at Final Time')
+plt.legend(loc='best')
+
+
+figEnergy = plt.figure(fignum)
+fignum += 1
+plt.plot(Glist_fine, Energy_list)
+plt.xlabel('$a_s (a_0)$')
+plt.ylabel('Energy ($\\mu K$)')
+
+
+figTPratio = plt.figure(fignum)
+fignum += 1
+ratio = L2R_TP / R2L_TP
+plt.plot(Glist_fine, ratio)
+plt.xlabel('$a_s (a_0)$')
+plt.ylabel('$T_L / T_R$')
+
 plt.show()

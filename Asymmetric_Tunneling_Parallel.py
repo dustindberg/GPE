@@ -61,7 +61,7 @@ trap_height = 400.              # Used for trap height
 sigma = 8.5                     # Width parameter for gaussian
 delta = 2. * (sigma ** 2)       # Width parameter for realistic barrier
 v_0 = 0.5                       # Coefficient for the trapping potential (was 10 for paper run)
-cooling_offset = 36.5 # 37.0          # Center offset for cooling potential
+cooling_offset = 38. # 37.0          # Center offset for cooling potential
 prob_region = 0.7               # For calculating probability
 prob_region_flipped = 0.3       # For calculating probability of the flipped case
 T = 40.0                        # Total time
@@ -72,10 +72,11 @@ x_grid_dim = 32 * 1024          # For faster testing: 8*1024, more accuracy: 32*
 # Create a tag using date and time to save and archive data
 today = date.today()
 
-filename = 'Trap_Height' + replace(str(height_asymmetric)) + '_Sigma' + replace(str(sigma)) + '_Vo' +\
-           replace(str(v_0)) + '_Offset' + replace(str(cooling_offset)) + '_T' + replace(str(T))
+filename = 'G_' + replace(str(g))
+            # 'Trap_Height' + replace(str(height_asymmetric)) + '_Sigma' + replace(str(sigma)) + '_Vo' +\
+            # replace(str(v_0)) + '_Offset' + replace(str(cooling_offset)) + '_T' + replace(str(T))
 savesfolder = filename
-parent_dir = "/home/skref/PycharmProjects/GPE/Archive_Data"
+parent_dir = "./Archive_Data"
 path = os.path.join(parent_dir, savesfolder)
 os.mkdir(path)
 savespath = 'Archive_Data/' + str(savesfolder) + '/'
@@ -235,7 +236,8 @@ def run_single_case(params):
         # bundle separately Schrodinger data
         'schrodinger': {
             'wavefunctions': schrodinger_wavefunctions,
-            'extent': [schrodinger_propagator.x.min(), schrodinger_propagator.x.max(), 0., max(schrodinger_propagator.times)],
+            'extent': [schrodinger_propagator.x.min(), schrodinger_propagator.x.max(),
+                       0., max(schrodinger_propagator.times)],
             'times': schrodinger_propagator.times,
 
             'x_average': schrodinger_propagator.x_average,
@@ -462,9 +464,9 @@ if __name__ == '__main__':
     # Analyze the Flipped GPE propagation
     fignum = analyze_propagation(qsys_flipped['gpe'], "Flipped GPE evolution", fignum)
 
-    ########################################################################################################################
+    ####################################################################################################################
     # Calculate and plot the transmission probability
-    ########################################################################################################################
+    ####################################################################################################################
 
     figTP = plt.figure(fignum, figsize=(18, 6))
     fignum += 1

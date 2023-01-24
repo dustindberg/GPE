@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import SymLogNorm
 import numpy as np
 from scipy.constants import hbar, Boltzmann
+from scipy.interpolate import UnivariateSpline
 from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D    # class for the split operator propagation
 import pickle as pickle
 from multiprocessing import Pool
@@ -15,13 +16,13 @@ import os
 ########################################################################################################################
 
 # Begin by loading the pickle file
-location = './Archive_Data/Paper_Collection/'
-method = 'Method1' # Input which method you are generating plots for
-identifier = 'REDO_Kick6,5_Sigma8,5_Height45,0_Vo0,5_T11,0' # Paste from pickle file
+location = './Archive_Data/LoopTesting/'
+method = 'Method1'  # Input which method you are generating plots for
+identifier = 'G_0,10'   # 'REDO_Kick6,5_Sigma8,5_Height45,0_Vo0,5_T11,0' # Paste from pickle file
 foldername = identifier + '/'
 path = location + foldername
 filename = identifier + '.pickle'
-savespath = 'Archive_Data/Paper_Collection/Generated_Plots/' + method + '/'
+savespath = location + foldername
 
 with open(path + filename, "rb") as f:
         qsys, qsys_flipped = pickle.load(f)
@@ -30,8 +31,8 @@ with open(path + filename, "rb") as f:
 # Load Params from Pickle
 x = qsys['gpe']['x']
 size = qsys['gpe']['x'].size
-x_cut = int(0.64 * size)
-x_cut_flipped = int(0.36 * size)
+x_cut = int(0.7 * size)
+x_cut_flipped = int(0.3 * size)
 dx = qsys['gpe']['dx']
 x_amplitude = qsys['parameters']['x_amplitude']
 x_grid_dim = qsys['parameters']['x_grid_dim']
@@ -52,15 +53,15 @@ eps = 0.0005
 sigma = 8.5
 delta = 2. * (sigma ** 2)
 # IMPORTANT: Check if you are using a time cutoff before plotting anything
-time_start = times[0] # Use times[0] if your simulation does not need trimming
-time_end = times[-1]  # Use times[-1] if your simulation does not need trimming
+time_start = 13.5   # Use times[0] if your simulation does not need trimming
+time_end = 15.0   # Use times[-1] if your simulation does not need trimming
 time_init = int((time_start/times[-1]) * len(times))
 time_cutoff = int((time_end / times[-1]) * len(times))
 
 gpe_l2r_wavefunction = qsys['gpe']['wavefunctions'][:time_cutoff][:]
 gpe_r2l_wavefunction = qsys_flipped['gpe']['wavefunctions'][:time_cutoff][:]
-schr_l2r_wavefunction = qsys['schrodinger']['wavefunctions'][:time_cutoff][:]
-schr_r2l_wavefunction = qsys_flipped['schrodinger']['wavefunctions'][:time_cutoff][:]
+#schr_l2r_wavefunction = qsys['schrodinger']['wavefunctions'][:time_cutoff][:]
+#schr_r2l_wavefunction = qsys_flipped['schrodinger']['wavefunctions'][:time_cutoff][:]
 mu_l2r = qsys['mu']
 mu_r2l = qsys_flipped['mu']
 init_state_l2r = qsys['init_state']
@@ -190,7 +191,7 @@ aspect = (extent_units[1] - extent_units[0]) / (extent_units[-1] - extent_units[
 
 fignum = 1 # Used to declare multiple figures
 plt_params = {'legend.fontsize': 'xx-large',
-         'figure.figsize': (8, 7),
+         'figure.figsize': (9, 7),
          'axes.labelsize': 'xx-large',
          'axes.titlesize':'xx-large',
          'xtick.labelsize':'xx-large',
@@ -198,11 +199,11 @@ plt_params = {'legend.fontsize': 'xx-large',
 plt.rcParams.update(plt_params)
 
 
-def plot_potential(fignum, potential, init_energy, position):
+def plot_potential(fignum, potential, position, init_energy=0):
     """
     Plots the potential in physical units
     :param fignum: Tracks the figure number so plots may be rendered simultaneously
-    :param v: The potential in dimensional units
+    :param potential: The potential in dimensional units
     :param init_energy: The initial ground state energy
     :param position: The position grid
     :return: The next figure number
@@ -358,13 +359,14 @@ def plot_relativediff(fignum, wave_title, wave_l2r, wave_r2l, time):
     fignum+=1
     title = wave_title + ' Relative Difference'
     # plt.title(title)
-    T_L = np.sum(np.abs(wave_l2r)[time_init:, x_cut:] ** 2, axis=1) * dx
-    T_R = np.sum(np.abs(wave_r2l)[time_init:, :x_cut_flipped] ** 2, axis=1) * dx
+    t_square= time*time
+    T_L = np.sum(np.abs(wave_l2r)[time_init:time_cutoff, x_cut:] ** 2, axis=1) * dx
+    T_R = np.sum(np.abs(wave_r2l)[time_init:time_cutoff, :x_cut_flipped] ** 2, axis=1) * dx
     d_r = 100 * np.abs(T_L - T_R)/((T_L + T_R)/2)
     plt.plot(
-        time, d_r
+        t_square, d_r
     )
-    plt.xlabel('Time (ms)')
+    plt.xlabel('$t^2 (ms^2)$')
     plt.ylabel("$d_r$ %")
     plt.tight_layout()
     plt.savefig(savespath + title + identifier + '.pdf')
@@ -472,8 +474,92 @@ def plot_ThomasFermiTest(fignum, wave_title, position, mu, v, g, init_state, cen
 
     return fignum
 
+def analyze_propagation(qsys_dict, title, figure_number):
+    """
+    Make plots to check the quality of propagation
+    :param qsys_dict: dict with parameters
+    :param title: str
+    :param figure_number: tracking figure number across plots
+    :return: an updated figure number
+    """
 
+    # Plot the density over time
+    plt.figure(figure_number, figsize=(8, 6))
+    figure_number += 1
+    plt.title(title)
+    plot_title = title
+    # plot the time dependent density
+    extent = qsys_dict['extent']
+    plt.imshow(
+        np.abs(qsys_dict['wavefunctions']) ** 2,
+        # some plotting parameters
+        origin='lower',
+        extent=extent,
+        aspect=(extent[1] - extent[0]) / (extent[-1] - extent[-2]),
+        norm=SymLogNorm(vmin=1e-7, vmax=1., linthresh=1e-15)
+    )
+    plt.xlabel('Coordinate $x$ (a.u.)')
+    plt.ylabel('Time $t$ (a.u.)')
+    plt.colorbar()
+    plt.savefig(savespath + title + '.pdf')
 
+    # Save the density for further testing
+    density = np.abs(qsys_dict['wavefunctions']) ** 2
+    np.save('Density_' + title, density)
+
+    # Plot tests of the Ehrenfest theorems
+    figefr = plt.figure(figure_number, figsize=(24, 6))
+    figure_number += 1
+    time = qsys_dict['times']
+    plt.subplot(141)
+    plt.title("Verify the first Ehrenfest theorem", pad=15)
+    # Calculate the derivative using the spline interpolation because times is not a linearly spaced array
+    plt.plot(time, UnivariateSpline(time, qsys_dict['x_average'], s=0).derivative()(time),
+             '-r', label='$d\\langle\\hat{x}\\rangle / dt$')
+    plt.plot(time, qsys_dict['x_average_rhs'], '--b', label='$\\langle\\hat{p}\\rangle$')
+    plt.legend(loc='lower right')
+    plt.ylabel('momentum')
+    plt.xlabel('time $t$ (a.u.)')
+
+    plt.subplot(142)
+    plt.title("Verify the second Ehrenfest theorem", pad=15)
+    # Calculate the derivative using the spline interpolation because times is not a linearly spaced array
+    plt.plot(time, UnivariateSpline(time, qsys_dict['p_average'], s=0).derivative()(time),
+             '-r', label='$d\\langle\\hat{p}\\rangle / dt$')
+    plt.plot(time, qsys_dict['p_average_rhs'], '--b', label='$\\langle -U\'(\\hat{x})\\rangle$')
+    plt.legend(loc='lower right')
+    plt.ylabel('force')
+    plt.xlabel('time $t$ (a.u.)')
+
+    plt.subplot(143)
+    plt.title("The expectation value of the Hamiltonian", pad=15)
+
+    # Analyze how well the energy was preserved
+    h = np.array(qsys_dict['hamiltonian_average'])
+    print(
+        "\nHamiltonian is preserved within the accuracy of {:.1e} percent".format(
+            100. * (1. - h.min() / h.max())
+        )
+    )
+    print("Initial Energy {:.4e}".format(h[0]))
+
+    print("\n" + str(plot_title) + " Hamiltonian is preserved within the accuracy of {:.1e} percent".format(
+            100. * (1. - h.min() / h.max())) + "\n" + str(plot_title) + " Initial Energy {:.4e}".format(h[0]) + "\n"
+          )
+
+    plt.plot(time, h)
+    plt.ylabel('Energy (au)')
+    plt.xlabel('Time $t$ (au)')
+
+    plt.subplot(144)
+    plt.title('Time Increments $dt$', pad=15)
+    plt.plot(qsys_dict['time_increments'])
+    plt.ylabel('$dt$')
+    plt.xlabel('Time Step')
+    figefr.suptitle(plot_title)
+    plt.savefig(savespath + 'EFT_' + plot_title + '.pdf')
+
+    return figure_number
 ########################################################################################################################
 #
 # Choose what to plot
@@ -491,14 +577,16 @@ def plot_ThomasFermiTest(fignum, wave_title, position, mu, v, g, init_state, cen
 #fignum = plot_probability(fignum, 'GPE', gpe_l2r_wavefunction, gpe_r2l_wavefunction, t_ms)
 #fignum = plot_probability(fignum, 'Schrodinger', schr_l2r_wavefunction, schr_r2l_wavefunction, t_ms)
 ## For plotting relative difference
-#fignum = plot_relativediff(fignum, 'GPE', gpe_l2r_wavefunction, gpe_r2l_wavefunction, t_ms)
+fignum = plot_relativediff(fignum, 'GPE', gpe_l2r_wavefunction, gpe_r2l_wavefunction, t_ms)
 #fignum = plot_relativediff(fignum, 'Schrodinger', schr_l2r_wavefunction, schr_r2l_wavefunction, t_ms)
 #fignum  = plot_relativediff_compare(fignum, gpe_l2r_wavefunction, gpe_r2l_wavefunction, schr_l2r_wavefunction,
 #                                   schr_r2l_wavefunction, t_ms)
 # For plotting Thomas-Fermi Approximation test
-fignum = plot_ThomasFermiTest(fignum, 'Thomas-Fermi Left to Right', x_mum, mu_l2r,
-                              initial_trap(x, cooling_offset), g, init_state_l2r, -1 * cooling_offset * L_xmum)
-fignum = plot_ThomasFermiTest(fignum, 'Thomas-Fermi Right to Left', x_mum, mu_r2l_nK,
-                             init_trap_right_nk, g * nK_conv, init_state_r2l, cooling_offset * L_xmum)
+#fignum = plot_ThomasFermiTest(fignum, 'Thomas-Fermi Left to Right', x_mum, mu_l2r,
+#                              initial_trap(x, cooling_offset), g, init_state_l2r, -1 * cooling_offset * L_xmum)
+#fignum = plot_ThomasFermiTest(fignum, 'Thomas-Fermi Right to Left', x_mum, mu_r2l_nK,
+#                             init_trap_right_nk, g * nK_conv, init_state_r2l, cooling_offset * L_xmum)
+#fignum = analyze_propagation(qsys['gpe'], 'GPE Evolution', fignum)
+#fignum = analyze_propagation(qsys_flipped['gpe'], 'GPE Evolution', fignum)
 
 plt.show()

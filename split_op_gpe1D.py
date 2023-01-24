@@ -9,8 +9,8 @@ import os
 
 threads = 4
 os.environ["OMP_NUM_THREADS"] = '{}'.format(threads)
-os.environ['NUMEXPR_MAX_THREADS']='{}'.format(threads)
-os.environ['NUMEXPR_NUM_THREADS']='{}'.format(threads)
+os.environ['NUMEXPR_MAX_THREADS'] = '{}'.format(threads)
+os.environ['NUMEXPR_NUM_THREADS'] = '{}'.format(threads)
 os.environ['OMP_NUM_THREADS'] = '{}'.format(threads)
 os.environ['MKL_NUM_THREADS'] = '{}'.format(threads)
 

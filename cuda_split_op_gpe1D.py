@@ -71,7 +71,7 @@ class CudaSplitOpGPE1D(object):
         try:
             self.pos_amp
         except AttributeError:
-            raise AttributeError("Coordinate grid range (X_amplitude) was not specified"
+            raise AttributeError("Coordinate grid range (X_amplitude) was not specified")
 
         try:
             self.g

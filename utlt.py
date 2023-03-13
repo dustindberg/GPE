@@ -5,7 +5,7 @@ import numpy as np
 from scipy.constants import hbar, Boltzmann
 from scipy.interpolate import UnivariateSpline
 from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D    # class for the split operator propagation
-import tqdm
+from tqdm import tqdm
 import h5py
 import sys
 import os
@@ -35,9 +35,9 @@ class BEC:
 
         # Reduction to 1D params
         self.N = number_of_atoms            # Number of particles
-        self.omeg_x = omega_x               # Harmonic oscillation in the x-axis in 2pi Hz
-        self.omeg_y = omega_y               # Harmonic oscillation in the y-axis in 2pi Hz
-        self.omeg_z = omega_z               # Harmonic oscillation in the z-axis in 2pi Hz
+        self.omega_x = omega_x              # Harmonic oscillation in the x-axis in 2pi Hz (radians per second)
+        self.omega_y = omega_y              # Harmonic oscillation in the y-axis in 2pi Hz (radians per second)
+        self.omega_z = omega_z              # Harmonic oscillation in the z-axis in 2pi Hz (radians per second)
         self.omeg_cooling = omega_cooling   # Harmonic oscillation for the trapping potential in Hz (if needed)
 
         if atom == "R87":
@@ -48,17 +48,17 @@ class BEC:
             self.a_s = self.a_s_K41
         else:
             sys.exit('ERROR: Parameter(atom) must be of the form: \n '
-                      'Type: string \n '
-                      'For Rubidium-87: R87 \n'
-                      'For Potassium-41: K41 \n '
-                      'Your input was: {} of type: {}'.format(atom, type(atom)))
+                     'Type: string \n '
+                     'For Rubidium-87: R87 \n'
+                     'For Potassium-41: K41 \n '
+                     'Your input was: {} of type: {}'.format(atom, type(atom)))
         # Parameters calculated by Python
-        self.L_x = np.sqrt(hbar / (self.m_R87 * self.omeg_x))  # Characteristic length in the x-direction in meters
-        self.L_y = np.sqrt(hbar / (self.m_R87 * self.omeg_y))  # Characteristic length in the y-direction in meters
-        self.L_z = np.sqrt(hbar / (self.m_R87 * self.omeg_z))  # Characteristic length in the z-direction in meters
+        self.L_x = np.sqrt(hbar / (self.m_R87 * self.omega_x))  # Characteristic length in the x-direction in meters
+        self.L_y = np.sqrt(hbar / (self.m_R87 * self.omega_y))  # Characteristic length in the y-direction in meters
+        self.L_z = np.sqrt(hbar / (self.m_R87 * self.omega_z))  # Characteristic length in the z-direction in meters
 
         self.g = 2 * self.N * self.L_x * self.mass * self.a_s * np.sqrt(
-            self.omeg_y * self.omeg_z) / hbar  # Dimensionless interaction parameter
+            self.omega_y * self.omega_z) / hbar  # Dimensionless interaction parameter
 
     def qatc(self, param):
         """
@@ -87,7 +87,7 @@ class BEC:
         :param int|float order: Specify the order, X, with respect to seconds. Eg. for milliseconds, X=-3
         :return: Time point or time grid in order Xs, where X is the order of the units you want. Eg. nanoseconds, X=-9
         """
-        return self.qatc(time) * (10 ** -order) / self.omeg_x
+        return self.qatc(time) * (10 ** -order) / self.omega_x
 
     def convert_energy(self, energy, order, units='K'):
         """
@@ -97,7 +97,7 @@ class BEC:
         :param str units:
         :return:
         """
-        energy = self.qatc(energy) * hbar * self.omeg_x
+        energy = self.qatc(energy) * hbar * self.omega_x
         if units == 'K':
             energy /= Boltzmann
         return energy * 10 ** -order
@@ -111,14 +111,40 @@ class BEC:
         """
         return density / (self.L_x * self.L_y * self.L_z * 10 ** (3 * -order))
 
-    def run_single_case(self, params):
+    def cooling(self, params):
+        init_state, mu = imag_time_gpe1D(
+            v=params['initial_trap'],
+            g=params['g'],
+            dt=params['dt1'],
+            epsilon=params['eps1'],
+            **params
+        )
+        init_state, mu = imag_time_gpe1D(
+            v=params['initial_trap'],
+            g=params['g'],
+            init_wavefunction=init_state,
+            dt=params['dt1'],
+            epsilon=params['eps1'],
+            **params
+        )
+        return init_state, mu
+
+    def run_single_case(self, params, kicked=False):
         """
         Does a single propagation of a BEC. Since interaction parameter, g, is specified here, this can be used for
         Schrodinger propagation as well
         :param params: system parameters such as, x_grid_dimension, times, g, potential and kinetic energies, etc.
+        :param kicked: Is the system kicked?
         :return: THe results of the single approximation.
         """
         gpe_propagator = SplitOpGPE1D(**params)
+        if kicked:
+            gpe_propagator.set_wavefunction(
+                params['init_state'] * np.exp(1j * params['init_momentum_kick'] * gpe_propagator.x)
+            )
+        else:
+            gpe_propagator.set_wavefunction(params['init_state'])
+
         gpe_wavefunctions = [gpe_propagator.propagate(t).copy() for t in tqdm(params['times'])]
 
         return {
@@ -154,3 +180,16 @@ def replace(string_for_replacement):
     return str(string_for_replacement).replace('.', ',')
 
 
+def paint_potential(x, w, t, sampling_freq):
+    """
+
+    :param x:
+    :param w:
+    :param t:
+    :param sampling_freq:
+    :return:
+    """
+    scan = []
+    extent = [x[0], x[-1]]
+    potential = UnivariateSpline(x, scan, k=3, s=0)
+    return potential(x)

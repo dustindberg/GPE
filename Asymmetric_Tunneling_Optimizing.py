@@ -8,6 +8,7 @@ from scipy.interpolate import UnivariateSpline
 from itertools import product
 from multiprocessing import Pool
 import tqdm
+import pickle
 import h5py
 import sys
 import os
@@ -40,6 +41,19 @@ def diff_pulse(pos_grid, height, width, center):
     """
     return (-2 * height / width) * (pos_grid - center) * np.exp(-((pos_grid - center) / width) ** 2)
 
+@njit
+def k(p):
+    """
+    Non-relativistic kinetic energy
+    """
+    return 0.5 * p ** 2
+
+@njit
+def diff_k(p):
+    """
+    the derivative of the kinetic energy for Ehrenfest theorem evaluation
+    """
+    return p
 
 ########################################################################################################################
 # Get the initial parameters and determine pulses for traps
@@ -92,7 +106,9 @@ def initial_trap(x):
 
 
 left_cool_params = dict(
-    x=pos_grid_dim,
+    x_grid_dim=pos_grid_dim,
+    x_amplitude=pos_amplitude,
+    k=k,
     initial_trap=initial_trap,
     g=g,
     dt1=1e-3,
@@ -154,25 +170,16 @@ def run_in_parallel(opt):
                              diff_pulse(x, barrier_height, sigma, 3 * gap)
                              )
 
-    @njit
-    def k(p):
-        """
-        Non-relativistic kinetic energy
-        """
-        return 0.5 * p ** 2
 
-    @njit
-    def diff_k(p):
-        """
-        the derivative of the kinetic energy for Ehrenfest theorem evaluation
-        """
-        return p
 
     sys_params_left = dict(
         x_amplitude=pos_amplitude,
         x_grid_dim=pos_grid_dim,
+        g=g,
         N=N,
         k=k,
+        v=v,
+        dt=prop_dt,
         init_state=left_init,
         initial_trap=initial_trap,
         diff_v=diff_v,
@@ -188,23 +195,32 @@ def run_in_parallel(opt):
     sys_params_right['init_state'] = right_init
     sys_params_right['init_momentum_kick'] = -sys_params_left['init_momentum_kick']
 
-    return {
-        'l2r_gpe': gpe.run_single_case(sys_params_left, kicked=True),
-        'r2l_gpe': gpe.run_single_case(sys_params_right, kicked=True)
-    }
+    """return {
+        'l2r_gpe': gpe.run_single_case(sys_params_left),
+        'r2l_gpe': gpe.run_single_case(sys_params_right)
+    }"""
+
+    return np.array((gpe.run_single_case_structured(sys_params_left), gpe.run_single_case_structured(sys_params_right)),
+                    dtype=[('l2r', np.ndarray), ('r2l', np.ndarray)])
 
 
 ########################################################################################################################
 # Begin the optimization process
 ########################################################################################################################
-
+savespath = './'
+filename = 'Test'
 
 if __name__ == '__main__':
+    # To do, move cooling here pleeeease, that way it only runs twice
     offsets = -1 * np.logspace(0.0 * gap, 0.5 * gap, 2)  # , 41)
-    with Pool as p:
-        results = zip(*p.map(run_in_parallel, offsets))
+    with Pool(processes=2) as p:
+        results = p.map(run_in_parallel, offsets)
 
+    with open(savespath + filename + ".pickle", "wb") as f:
+        pickle.dump(results, f)
 
+    with open(savespath + filename + ".pickle", "rb") as f:
+        qsys = pickle.load(f)
 
         
 

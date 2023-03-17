@@ -16,7 +16,7 @@ class BEC:
     This is an externalized class for parameters, repeated use tools, and for swapping between experimental types
     """
     def __init__(self, atom='R87', number_of_atoms=1e4, omega_x=100*np.pi, omega_y=1000*np.pi, omega_z=1000*np.pi,
-                 omega_cooling=900*np.pi):
+                 omega_cooling=900*np.pi, kicked=False):
         """
 
         :param str atom: Specify R87 of K41 for rubidium or Potassium BEC respectively
@@ -59,6 +59,7 @@ class BEC:
 
         self.g = 2 * self.N * self.L_x * self.mass * self.a_s * np.sqrt(
             self.omega_y * self.omega_z) / hbar  # Dimensionless interaction parameter
+        self.kicked = kicked
 
     def qatc(self, param):
         """
@@ -112,7 +113,7 @@ class BEC:
         return density / (self.L_x * self.L_y * self.L_z * 10 ** (3 * -order))
 
     def cooling(self, params):
-        init_state, mu = imag_time_gpe1D(
+        """init_state, mu = imag_time_gpe1D(
             v=params['initial_trap'],
             g=params['g'],
             dt=params['dt1'],
@@ -126,10 +127,24 @@ class BEC:
             dt=params['dt1'],
             epsilon=params['eps1'],
             **params
+        )"""
+        init_state, mu = imag_time_gpe1D(
+            v=params['initial_trap'],
+            dt=params['dt1'],
+            epsilon=params['eps1'],
+            **params
         )
+        init_state, mu = imag_time_gpe1D(
+            v=params['initial_trap'],
+            init_wavefunction=init_state,
+            dt=params['dt1'],
+            epsilon=params['eps1'],
+            **params
+        )
+
         return init_state, mu
 
-    def run_single_case(self, params, kicked=False):
+    def run_single_case(self, params):
         """
         Does a single propagation of a BEC. Since interaction parameter, g, is specified here, this can be used for
         Schrodinger propagation as well
@@ -138,7 +153,7 @@ class BEC:
         :return: THe results of the single approximation.
         """
         gpe_propagator = SplitOpGPE1D(**params)
-        if kicked:
+        if self.kicked:
             gpe_propagator.set_wavefunction(
                 params['init_state'] * np.exp(1j * params['init_momentum_kick'] * gpe_propagator.x)
             )
@@ -168,6 +183,42 @@ class BEC:
 
             'parameters': params
         }
+
+    def run_single_case_structured(self, params):
+        """
+        Does a single propagation of a BEC. Since interaction parameter, g, is specified here, this can be used for
+        Schrodinger propagation as well
+        :param params: system parameters such as, x_grid_dimension, times, g, potential and kinetic energies, etc.
+        :param kicked: Is the system kicked?
+        :return: THe results of the single approximation.
+        """
+        gpe_propagator = SplitOpGPE1D(**params)
+        if self.kicked:
+            gpe_propagator.set_wavefunction(
+                params['init_state'] * np.exp(1j * params['init_momentum_kick'] * gpe_propagator.x)
+            )
+        else:
+            gpe_propagator.set_wavefunction(params['init_state'])
+
+        gpe_wavefunctions = [gpe_propagator.propagate(t).copy() for t in tqdm(params['times'])]
+        extent = [gpe_propagator.x.min(), gpe_propagator.x.max(),
+                   min(gpe_propagator.times), max(gpe_propagator.times)]
+
+        return np.array((gpe_wavefunctions, extent, gpe_propagator.times, gpe_propagator.x_average,
+                         gpe_propagator.x_average_rhs, gpe_propagator.p_average, gpe_propagator.p_average_rhs,
+                         gpe_propagator.hamiltonian_average, gpe_propagator.time_increments, gpe_propagator.dx,
+                         gpe_propagator.x, params),
+                        dtype=[('wavefunctions', tuple), ('extent', list), ('times', list), ('x_average', list),
+                                  ('x_average_rhs', list), ('p_average', list), ('p_average_rhs', list),
+                                  ('hamiltonian_average', list), ('time_increments', list), ('dx', '<f4'),
+                                  ('x', type(gpe_propagator.x)), ('parameters', dict)]
+                        )
+    def get_tag(self, params):
+        """
+        Creates a unique tag for saving
+        :param params: parameters used for the experiment
+        :return:
+        """
 
 
 def replace(string_for_replacement):

@@ -98,7 +98,7 @@ scale = start_scale
 #     stri = str(float(i))
 #     if len(stri) < 4:
 #         stri += '0'
-#     tag = 'Diode_Kick' + str(kick) + '_Delta' + str(delta) + '_Gscale' + stri + '_Height' + str(height_asymmetric) + 'Eps0,005'
+#     tag = 'Diode_Kick' + str(init_momentum_kick) + '_Delta' + str(delta) + '_Gscale' + stri + '_Height' + str(height_asymmetric) + 'Eps0,005'
 #     filename = Replace(tag)
 #     path = os.path.join(parent_dir, filename)
 #     with open(path + '/' + filename + ".pickle", "rb") as f:

@@ -105,25 +105,13 @@ def initial_trap(x):
     return 0.5 * (x + (0.5 * pos_amplitude)) ** 2
 
 
-left_cool_params = dict(
-    x_grid_dim=pos_grid_dim,
-    x_amplitude=pos_amplitude,
-    k=k,
-    initial_trap=initial_trap,
-    g=g,
-    dt1=1e-3,
-    dt2=1e-5,
-    eps1=1e-8,
-    eps2=1e-10,
-)
-
-left_init, left_mu = gpe.cooling(left_cool_params)
-right_cool_params = left_cool_params.copy()
-right_cool_params['initial_trap'] = njit(lambda x: initial_trap(-x))
-right_init, right_mu = gpe.cooling(right_cool_params)
+def run_in_parallel(param):
+    opt = param[0]
+    l_param = param[1]
+    r_param = param[2]
+    print('Beginning GPE propagation with asymm parameter: {:.4f}'.format(opt))
 
 
-def run_in_parallel(opt):
     @njit(ParalLel=True)
     def v(x, t=0):
         """
@@ -170,37 +158,18 @@ def run_in_parallel(opt):
                              diff_pulse(x, barrier_height, sigma, 3 * gap)
                              )
 
-
-
-    sys_params_left = dict(
-        x_amplitude=pos_amplitude,
-        x_grid_dim=pos_grid_dim,
-        g=g,
-        N=N,
-        k=k,
-        v=v,
-        dt=prop_dt,
-        init_state=left_init,
-        initial_trap=initial_trap,
-        diff_v=diff_v,
-        diff_k=diff_k,
-        times=times,
-        init_momentum_kick=kick,
-        iterator=opt,
-    )
-
-    # Copy the Left starting params, and then modify so that it starts on the right
-    sys_params_right = sys_params_left.copy()
-    sys_params_right['initial_trap'] = njit(lambda x: initial_trap(-x))
-    sys_params_right['init_state'] = right_init
-    sys_params_right['init_momentum_kick'] = -sys_params_left['init_momentum_kick']
-
+    l_param['v'] = v
+    l_param['diff_v'] = diff_v
+    l_param['iterator'] = opt
+    r_param['v'] = v
+    r_param['diff_v'] = diff_v
+    r_param['iterator'] = opt
     """return {
         'l2r_gpe': gpe.run_single_case(sys_params_left),
         'r2l_gpe': gpe.run_single_case(sys_params_right)
     }"""
 
-    return np.array((gpe.run_single_case_structured(sys_params_left), gpe.run_single_case_structured(sys_params_right)),
+    return np.array((gpe.run_single_case_structured(l_param), gpe.run_single_case_structured(r_param)),
                     dtype=[('l2r', np.ndarray), ('r2l', np.ndarray)])
 
 
@@ -212,9 +181,49 @@ filename = 'Test'
 
 if __name__ == '__main__':
     # To do, move cooling here pleeeease, that way it only runs twice
-    offsets = -1 * np.logspace(0.0 * gap, 0.5 * gap, 2)  # , 41)
+    left_cool_params = dict(
+        x_grid_dim=pos_grid_dim,
+        x_amplitude=pos_amplitude,
+        k=k,
+        initial_trap=initial_trap,
+        g=g,
+        dt1=1e-3,
+        dt2=1e-5,
+        eps1=1e-8,
+        eps2=1e-10,
+    )
+
+    left_init, left_mu = gpe.cooling(left_cool_params)
+    right_cool_params = left_cool_params.copy()
+    right_cool_params['initial_trap'] = njit(lambda x: initial_trap(-x))
+    right_init, right_mu = gpe.cooling(right_cool_params)
+
+    sys_params_left = dict(
+        x_amplitude=pos_amplitude,
+        x_grid_dim=pos_grid_dim,
+        g=g,
+        N=N,
+        k=k,
+        dt=prop_dt,
+        init_state=left_init,
+        initial_trap=initial_trap,
+        diff_k=diff_k,
+        times=times,
+        init_momentum_kick=kick,
+    )
+
+    # Copy the Left starting params, and then modify so that it starts on the right
+    sys_params_right = sys_params_left.copy()
+    sys_params_right['initial_trap'] = njit(lambda x: initial_trap(-x))
+    sys_params_right['init_state'] = right_init
+    sys_params_right['init_momentum_kick'] = -sys_params_left['init_momentum_kick']
+    offsets = -1 * np.logspace(0.0 * gap, 0.5 * gap, 2)     # Use 41 when this starts working
+    iterable = []
+    for _ in offsets:
+        iterable.append((_, sys_params_left, sys_params_right))
+
     with Pool(processes=2) as p:
-        results = p.map(run_in_parallel, offsets)
+        results = p.map(run_in_parallel, iterable)
 
     with open(savespath + filename + ".pickle", "wb") as f:
         pickle.dump(results, f)

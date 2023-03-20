@@ -297,7 +297,7 @@ if __name__ == '__main__':
 
     sys_params_flipped = sys_params.copy()  # Copy to create parameters for the flipped case
 
-    # This is used to flip the initial trap about the offset and then kick it
+    # This is used to flip the initial trap about the offset and then init_momentum_kick it
     sys_params_flipped['initial_trap'] = njit(lambda x: initial_trap(-x))
     sys_params_flipped['init_momentum_kick'] = -sys_params_flipped['init_momentum_kick']
     ####################################################################################################################

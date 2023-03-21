@@ -6,7 +6,7 @@ from numba import njit
 from scipy.constants import hbar, Boltzmann
 from scipy.interpolate import UnivariateSpline
 from itertools import product
-from multiprocessing import Pool
+from multiprocessing import Pool, Process, Manager
 import tqdm
 import pickle
 import h5py
@@ -55,6 +55,7 @@ def diff_k(p):
     """
     return p
 
+
 ########################################################################################################################
 # Get the initial parameters and determine pulses for traps
 ########################################################################################################################
@@ -102,7 +103,7 @@ def initial_trap(x):
     :param x:
     :return:
     """
-    return 0.5 * (x + (0.5 * pos_amplitude)) ** 2
+    return 0.25 * (x + (0.5 * pos_amplitude)) ** 2
 
 
 def run_in_parallel(param):
@@ -222,8 +223,9 @@ if __name__ == '__main__':
     for _ in offsets:
         iterable.append((_, sys_params_left, sys_params_right))
 
-    with Pool(processes=2) as p:
-        results = p.map(run_in_parallel, iterable)
+    with Pool() as pool:
+        task = [pool.apply_async(run_in_parallel, (_, sys_params_left, sys_params_right)) for _ in offsets]
+        results = np.array([_.get() for _ in task])
 
     with open(savespath + filename + ".pickle", "wb") as f:
         pickle.dump(results, f)
@@ -231,7 +233,6 @@ if __name__ == '__main__':
     with open(savespath + filename + ".pickle", "rb") as f:
         qsys = pickle.load(f)
 
-        
 
 ########################################################################################################################
 # Save the Results

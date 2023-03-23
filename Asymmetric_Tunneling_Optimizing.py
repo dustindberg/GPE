@@ -17,7 +17,7 @@ import os
 # Determine global functions
 ########################################################################################################################
 
-
+@njit
 def pulse(pos_grid, height, width, center):
     """
     Adjustable width Gaussian. Passed as a function for repeated use and readability
@@ -29,7 +29,7 @@ def pulse(pos_grid, height, width, center):
     """
     return height * np.exp(-((pos_grid - center) / width) ** 2)
 
-
+@njit
 def diff_pulse(pos_grid, height, width, center):
     """
     Derivative of the
@@ -72,10 +72,10 @@ gap = sigma * np.sqrt(2 * np.log(2))        # Half of Full-width, Half-Max for c
 barrier_height = 400                        # Dimensionless height of the barrier
 
 # Create the position grid and times
-pos_grid_dim = 4 * 1024         # Resolution for the position grid (in our case, this is the x-axis resolution)
+pos_grid_dim = 1 * 1024         # Resolution for the position grid (in our case, this is the x-axis resolution)
 pos_amplitude = 100             # Code is always centered about 0, so +/- amplitude are the bounds of the position grid
 tp_cut = 0.3                    # % of position grid to integrate over for tunneling
-T = 5                           # Final time. Declare as a separate parameter for conversions
+T = 1.                          # Final time. Declare as a separate parameter for conversions
 times = np.linspace(0, T, 500)  # Time grid: required a resolution of 500 for split operator class
 prop_dt = 1e-6                  # Initial guess for the adaptive step propagation
 
@@ -106,14 +106,10 @@ def initial_trap(x):
     return 0.25 * (x + (0.5 * pos_amplitude)) ** 2
 
 
-def run_in_parallel(param):
-    opt = param[0]
-    l_param = param[1]
-    r_param = param[2]
-    print('Beginning GPE propagation with asymm parameter: {:.4f}'.format(opt))
+def run_in_parallel(opt, param):
+    print('Beginning {} side GPE propagation with asymm parameter: {:.4f}'.format(param['side'], opt))
 
-
-    @njit(ParalLel=True)
+    @njit(parallel=True)
     def v(x, t=0):
         """
         Function for the propagation potential
@@ -132,7 +128,7 @@ def run_in_parallel(param):
         pulses *= barrier_height / pulses.max()
         return pulses
 
-    @njit(Parallel=True)
+    @njit(parallel=True)
     def diff_v(x, t=0):
         """
 
@@ -159,19 +155,11 @@ def run_in_parallel(param):
                              diff_pulse(x, barrier_height, sigma, 3 * gap)
                              )
 
-    l_param['v'] = v
-    l_param['diff_v'] = diff_v
-    l_param['iterator'] = opt
-    r_param['v'] = v
-    r_param['diff_v'] = diff_v
-    r_param['iterator'] = opt
-    """return {
-        'l2r_gpe': gpe.run_single_case(sys_params_left),
-        'r2l_gpe': gpe.run_single_case(sys_params_right)
-    }"""
+    param['v'] = v
+    param['diff_v'] = diff_v
+    param['iterator'] = opt
 
-    return np.array((gpe.run_single_case_structured(l_param), gpe.run_single_case_structured(r_param)),
-                    dtype=[('l2r', np.ndarray), ('r2l', np.ndarray)])
+    return np.array(gpe.run_single_case_structured(param))
 
 
 ########################################################################################################################
@@ -211,6 +199,7 @@ if __name__ == '__main__':
         diff_k=diff_k,
         times=times,
         init_momentum_kick=kick,
+        side='left',
     )
 
     # Copy the Left starting params, and then modify so that it starts on the right
@@ -218,20 +207,25 @@ if __name__ == '__main__':
     sys_params_right['initial_trap'] = njit(lambda x: initial_trap(-x))
     sys_params_right['init_state'] = right_init
     sys_params_right['init_momentum_kick'] = -sys_params_left['init_momentum_kick']
+    sys_params_right['side'] = 'right'
     offsets = -1 * np.logspace(0.0 * gap, 0.5 * gap, 2)     # Use 41 when this starts working
-    iterable = []
-    for _ in offsets:
-        iterable.append((_, sys_params_left, sys_params_right))
+    full_params = [sys_params_left, sys_params_right]
 
     with Pool() as pool:
-        task = [pool.apply_async(run_in_parallel, (_, sys_params_left, sys_params_right)) for _ in offsets]
+        task = [pool.apply_async(run_in_parallel, [a, b]) for a, b in product(offsets, full_params)]
+        pool.close()
+        pool.join()
         results = np.array([_.get() for _ in task])
+    h5f = h5py.File('data.h5', 'w')
+    for _ in results:
+        tag = utlt.replace(str(_))
+        h5f.create_dataset(tag, data=np.array(results(_)))
+    h5f.close()
 
-    with open(savespath + filename + ".pickle", "wb") as f:
-        pickle.dump(results, f)
-
-    with open(savespath + filename + ".pickle", "rb") as f:
-        qsys = pickle.load(f)
+    h5f = h5py.File('data.h5', 'r')
+    b = h5f['dataset_1'][:]
+    h5f.close()
+    np.allclose(results, b)
 
 
 ########################################################################################################################

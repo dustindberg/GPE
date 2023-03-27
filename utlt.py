@@ -4,7 +4,7 @@ from matplotlib.colors import SymLogNorm
 import numpy as np
 from scipy.constants import hbar, Boltzmann
 from scipy.interpolate import UnivariateSpline
-from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D    # class for the split operator propagation
+from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D  # class for the split operator propagation
 from tqdm import tqdm
 import h5py
 import sys
@@ -15,30 +15,31 @@ class BEC:
     """
     This is an externalized class for parameters, repeated use tools, and for swapping between experimental types
     """
-    def __init__(self, atom='R87', number_of_atoms=1e4, omega_x=100*np.pi, omega_y=1000*np.pi, omega_z=1000*np.pi,
-                 omega_cooling=900*np.pi, kicked=False):
+
+    def __init__(self, atom='R87', number_of_atoms=1e4, omega_x=100 * np.pi, omega_y=1000 * np.pi, omega_z=1000 * np.pi,
+                 omega_cooling=900 * np.pi, kicked=False):
         """
 
         :param str atom: Specify R87 of K41 for rubidium or Potassium BEC respectively
         :param int number_of_atoms: Number of atoms for BEC
         """
         # Define physical parameters
-        self.a_0 = 5.291772109e-11          # Bohr Radius in meters
+        self.a_0 = 5.291772109e-11  # Bohr Radius in meters
 
         # Rubidium-87 properties
-        self.m_R87 = 1.4431609e-25          # Calculated mass of 87Rb in kg
-        self.a_s_R87 = 100 * self.a_0       # Background scattering length of 87Rb in meters
+        self.m_R87 = 1.4431609e-25  # Calculated mass of 87Rb in kg
+        self.a_s_R87 = 100 * self.a_0  # Background scattering length of 87Rb in meters
 
         # Potassium-41 properties
-        self.m_K41 = 6.80187119e-26         # Calculated mass of 41K in kg
-        self.a_s_K41 = 65.42 * self.a_0     # Background scattering length of 41K in meters
+        self.m_K41 = 6.80187119e-26  # Calculated mass of 41K in kg
+        self.a_s_K41 = 65.42 * self.a_0  # Background scattering length of 41K in meters
 
         # Reduction to 1D params
-        self.N = number_of_atoms            # Number of particles
-        self.omega_x = omega_x              # Harmonic oscillation in the x-axis in 2pi Hz (radians per second)
-        self.omega_y = omega_y              # Harmonic oscillation in the y-axis in 2pi Hz (radians per second)
-        self.omega_z = omega_z              # Harmonic oscillation in the z-axis in 2pi Hz (radians per second)
-        self.omeg_cooling = omega_cooling   # Harmonic oscillation for the trapping potential in Hz (if needed)
+        self.N = number_of_atoms  # Number of particles
+        self.omega_x = omega_x  # Harmonic oscillation in the x-axis in 2pi Hz (radians per second)
+        self.omega_y = omega_y  # Harmonic oscillation in the y-axis in 2pi Hz (radians per second)
+        self.omega_z = omega_z  # Harmonic oscillation in the z-axis in 2pi Hz (radians per second)
+        self.omeg_cooling = omega_cooling  # Harmonic oscillation for the trapping potential in Hz (if needed)
 
         if atom == "R87":
             self.mass = self.m_R87
@@ -149,7 +150,6 @@ class BEC:
         Does a single propagation of a BEC. Since interaction parameter, g, is specified here, this can be used for
         Schrodinger propagation as well
         :param params: system parameters such as, x_grid_dimension, times, g, potential and kinetic energies, etc.
-        :param kicked: Is the system kicked?
         :return: THe results of the single approximation.
         """
         gpe_propagator = SplitOpGPE1D(**params)
@@ -200,25 +200,42 @@ class BEC:
         else:
             gpe_propagator.set_wavefunction(params['init_state'])
 
-        gpe_wavefunctions = [gpe_propagator.propagate(t).copy() for t in tqdm(params['times'])]
+        gpe_wavefunctions = [gpe_propagator.propagate(t).copy() for t in params['times']]  # tqdm(params['times'])]
         extent = [gpe_propagator.x.min(), gpe_propagator.x.max(),
-                   min(gpe_propagator.times), max(gpe_propagator.times)]
+                  min(gpe_propagator.times), max(gpe_propagator.times)]
 
-        return np.array((gpe_wavefunctions, extent, gpe_propagator.times, gpe_propagator.x_average,
+        """if not self.kicked:
+            params['init_momentum_kick'] = 0
+
+        struct_params = np.array(
+            (params['x_amplitude'], params['x_grid_dim'], params['g'], params['N'], params['dt'],
+             params['init_state'], params['initial_trap'], params['k'], params['diff_k'], params['v'],
+             params['diff_v'], params['times'], params['init_momentum_kick'], params['side']),
+            dtype=[('x_amplitude', type(params['x_amplitude'])), ('x_grid_dim', type(params['x_grid_dim'])),
+                   ('g', type(params['g'])), ('N', type(params['N'])), ('dt', type(params['dt'])),
+                   ('init_state', type(params['init_state'])), ('initial_trap', type(params['initial_trap'])),
+                   ('k', type(params['k'])), ('diff_k', type(params['diff_k'])), ('v', type(params['v'])),
+                   ('diff_v', type(params['diff_v'])), ('times', type(params['times'])),
+                   ('init_momentum_kick', type(params['init_momentum_kick'])), ('side', type(params['side']))]
+        )"""
+
+        return np.array((gpe_wavefunctions[:], extent, gpe_propagator.times, gpe_propagator.x_average,
                          gpe_propagator.x_average_rhs, gpe_propagator.p_average, gpe_propagator.p_average_rhs,
                          gpe_propagator.hamiltonian_average, gpe_propagator.time_increments, gpe_propagator.dx,
-                         gpe_propagator.x, params),
-                        dtype=[('wavefunctions', tuple), ('extent', list), ('times', list), ('x_average', list),
-                                  ('x_average_rhs', list), ('p_average', list), ('p_average_rhs', list),
-                                  ('hamiltonian_average', list), ('time_increments', list), ('dx', '<f4'),
-                                  ('x', type(gpe_propagator.x)), ('parameters', dict)]
+                         gpe_propagator.x, {**params}),
+                        dtype=[('wavefunctions', np.ndarray), ('extent', list), ('times', list), ('x_average', list),
+                               ('x_average_rhs', list), ('p_average', list), ('p_average_rhs', list),
+                               ('hamiltonian_average', list), ('time_increments', list), ('dx', '<f4'),
+                               ('x', type(gpe_propagator.x)), ('parameters', dict)]
                         )
+
     def get_tag(self, params):
         """
         Creates a unique tag for saving
         :param params: parameters used for the experiment
         :return:
         """
+        return 0
 
 
 def replace(string_for_replacement):

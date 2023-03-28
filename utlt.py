@@ -200,7 +200,7 @@ class BEC:
         else:
             gpe_propagator.set_wavefunction(params['init_state'])
 
-        gpe_wavefunctions = [gpe_propagator.propagate(t).copy() for t in params['times']]  # tqdm(params['times'])]
+        gpe_wavefunctions = [gpe_propagator.propagate(t).copy() for t in tqdm(params['times'])]
         extent = [gpe_propagator.x.min(), gpe_propagator.x.max(),
                   min(gpe_propagator.times), max(gpe_propagator.times)]
 

@@ -10,7 +10,6 @@ from itertools import product
 from multiprocessing import Pool, Process, Manager
 import tqdm
 import pickle
-import h5py
 import sys
 import os
 
@@ -70,15 +69,15 @@ sigma = waist / 2                           # Delta = sqrt(2) sigma, such that d
 fwhm = 2 * sigma * np.sqrt(2 * np.log(2))   # Full Width, Half Maximum (used for spacing parameters)
 delta = 2 * sigma ** 2                      # Minimum Width Parameter for the Gaussian function, pulse()
 gap = sigma * np.sqrt(2 * np.log(2))        # Half of Full-width, Half-Max for creating uniform gaps between Gaussians
-barrier_height = 500                        # Dimensionless height of the barrier
+barrier_height = 1.2e3                        # Dimensionless height of the barrier
 
 # Create the position grid and times
-pos_grid_dim = 2 * 1024         # Resolution for the position grid (in our case, this is the x-axis resolution)
-pos_amplitude = 50              # Code is always centered about 0, so +/- amplitude are the bounds of the position grid
+pos_grid_dim = 4 * 1024         # Resolution for the position grid (in our case, this is the x-axis resolution)
+pos_amplitude = 60              # Code is always centered about 0, so +/- amplitude are the bounds of the position grid
 tp_cut = 0.35                    # % of position grid to integrate over for tunneling
-T = 0.3                         # Final time. Declare as a separate parameter for conversions
+T = 0.5                         # Final time. Declare as a separate parameter for conversions
 times = np.linspace(0, T, 500)  # Time grid: required a resolution of 500 for split operator class
-prop_dt = 1e-6                  # Initial guess for the adaptive step propagation
+prop_dt = 5e-6                  # Initial guess for the adaptive step propagation
 
 atom_params = dict(
     atom='R87',
@@ -91,7 +90,7 @@ atom_params = dict(
 gpe = utlt.BEC(**atom_params)
 g = gpe.g
 N = gpe.N
-kick = 5e3
+
 
 
 ########################################################################################################################
@@ -113,7 +112,7 @@ def run_in_parallel(opt, param):
     print('Beginning {} side GPE propagation with asymm parameter: {:.4f}'.format(param['side'], opt))
 
 
-    @njit(parallel=True)
+    @njit
     def barrier(x):
         """
 
@@ -143,7 +142,7 @@ def run_in_parallel(opt, param):
                 }
 
 
-    @njit(parallel=True)
+    @njit
     def v(x, t=0):
         """
         Function for the propagation potential
@@ -156,7 +155,7 @@ def run_in_parallel(opt, param):
                          pulse(x, (pos_amplitude / 10) * sigma, -pos_amplitude)
         return pot['h_mod'] * (pot['v'] + 10 * edge_potential)
 
-    @njit(parallel=True)
+    @njit
     def diff_v(x, t=0):
         """
 
@@ -183,14 +182,15 @@ def run_in_parallel(opt, param):
 
 if __name__ == '__main__':
     print('Waist size is {} um'.format(gpe.convert_x(waist, -6)))
-    n_iters = 1
-    unique_tag = n_iters
-    savespath = './Archive_Data/DoublePotential-{}_iterations/'.format(unique_tag)
+    n_iters = 2
+    kick = 50
+    savespath = './Archive_Data/DoublePotential-{}_iterations-{}T-{}Height-{}Kick/'.format(
+        n_iters, T, barrier_height, kick)
     if os.path.exists(savespath):
         print('Warning! Directory: {} Exists. You may be overwriting previous results.'.format(savespath))
     else:
         os.mkdir(savespath)
-    filename = 'Test3'
+    filename = 'DoubleBarrier-{}T-{}Height'.format(T, barrier_height)
 
     prob_region = 0.4
     # To do, move cooling here pleeeease, that way it only runs twice
@@ -236,7 +236,7 @@ if __name__ == '__main__':
     sys_params_right['init_state'] = right_init
     sys_params_right['init_momentum_kick'] = -sys_params_left['init_momentum_kick']
     sys_params_right['side'] = 'right'
-    offsets = -1 * np.linspace(0.0, 1.0, n_iters)     # Use 41 when this starts working
+    offsets = np.linspace(0.0, 1.0, n_iters)
     both_side_params = [sys_params_left, sys_params_right]
 
     with Pool() as pool:
@@ -271,7 +271,7 @@ if __name__ == '__main__':
         plt.figure(figure_number)
         figure_number += 1
 
-        plot_title = 'Density{:.4f}param-{}'.format(_['parameters']['iterator'], _['parameters']['side'])
+        plot_title = utlt.replace('Density{:.3f}param-{}'.format(_['parameters']['iterator'], _['parameters']['side']))
         # plot the time dependent density
         extent = _['extent']
         plt.imshow(

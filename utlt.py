@@ -6,7 +6,6 @@ from scipy.constants import hbar, Boltzmann
 from scipy.interpolate import UnivariateSpline
 from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D  # class for the split operator propagation
 from tqdm import tqdm
-import h5py
 import sys
 import os
 

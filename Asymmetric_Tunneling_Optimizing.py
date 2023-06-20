@@ -22,24 +22,22 @@ def pulse(pos_grid, width, center):
     """
     Adjustable width Gaussian. Passed as a function for repeated use and readability
     :param pos_grid:
-    :param height:
     :param center:
     :param width:
     :return:
     """
-    return np.exp(-((pos_grid - center) / width) ** 2)
+    return np.exp(-0.5 * ((pos_grid - center) / width) ** 2)
 
 @njit
 def diff_pulse(pos_grid, width, center):
     """
-    Derivative of the
+    Derivative of the Gaussian pulse
     :param pos_grid:
-    :param height:
     :param center:
     :param width:
     :return:
     """
-    return (-2 / width) * (pos_grid - center) * np.exp(-((pos_grid - center) / width) ** 2)
+    return -(pos_grid - center) / (width ** 2) * np.exp(-0.5 * ((pos_grid - center) / width) ** 2)
 
 @njit
 def k(p):
@@ -63,22 +61,6 @@ def diff_k(p):
 propagation_freq = 0.5 * 2 * np.pi          # Frequency of the shallow trap along axis of propagation (we use x-axis)
 perpendicular_freqs = 200 * 2 * np.pi       # Frequency of the axes perpendicular to propagation (we use y- and z-axis)
 
-# Beam Parameters
-waist = 2                                  # Waist of the gaussian beam (dimensionless)
-sigma = waist / 2                           # Delta = sqrt(2) sigma, such that delta^2 = 2 * sigma^2
-fwhm = 2 * sigma * np.sqrt(2 * np.log(2))   # Full Width, Half Maximum (used for spacing parameters)
-delta = 2 * sigma ** 2                      # Minimum Width Parameter for the Gaussian function, pulse()
-gap = sigma * np.sqrt(2 * np.log(2))        # Half of Full-width, Half-Max for creating uniform gaps between Gaussians
-barrier_height = 1.2e3                        # Dimensionless height of the barrier
-
-# Create the position grid and times
-pos_grid_dim = 4 * 1024         # Resolution for the position grid (in our case, this is the x-axis resolution)
-pos_amplitude = 60              # Code is always centered about 0, so +/- amplitude are the bounds of the position grid
-tp_cut = 0.35                    # % of position grid to integrate over for tunneling
-T = 0.5                         # Final time. Declare as a separate parameter for conversions
-times = np.linspace(0, T, 500)  # Time grid: required a resolution of 500 for split operator class
-prop_dt = 5e-6                  # Initial guess for the adaptive step propagation
-
 atom_params = dict(
     atom='R87',
     omega_x=propagation_freq,
@@ -91,6 +73,21 @@ gpe = utlt.BEC(**atom_params)
 g = gpe.g
 N = gpe.N
 
+# Beam Parameters
+waist = gpe.dimless_x(25, -6)               # Dimensionless waist of the gaussian beam (converted from physical units)
+sigma = waist / 2                           # Delta = sqrt(2) sigma, such that delta^2 = 2 * sigma^2
+fwhm = 2 * sigma * np.sqrt(2 * np.log(2))   # Full Width, Half Maximum (used for spacing parameters)
+delta = 2 * sigma ** 2                      # Minimum Width Parameter for the Gaussian function, pulse()
+gap = sigma * np.sqrt(2 * np.log(2))        # Half of Full-width, Half-Max for creating uniform gaps between Gaussians
+barrier_height = gpe.dimless_energy(120, -9, 'K')  # Dimensionless height of the barrier (converted from physical units)
+
+# Create the position grid and times
+pos_grid_dim = 2 ** 14          # Resolution for the position grid (in our case, this is the x-axis resolution)
+pos_amplitude = 85              # Code is always centered about 0, so +/- amplitude are the bounds of the position grid
+tp_cut = 0.46                   # % of position grid to integrate over for tunneling
+T = 1.0                         # Final time. Declare as a separate parameter for conversions
+times = np.linspace(0, T, 500)  # Time grid: required a resolution of 500 for split operator class
+prop_dt = 6.4e-6                # Initial guess for the adaptive step propagation
 
 
 ########################################################################################################################
@@ -105,7 +102,7 @@ def initial_trap(x):
     :param x:
     :return:
     """
-    return (x + (0.5 * pos_amplitude)) ** 2
+    return 2 * (x + (0.35 * pos_amplitude)) ** 2
 
 
 def run_in_parallel(opt, param):
@@ -119,28 +116,28 @@ def run_in_parallel(opt, param):
         :param x:
         :return:
         """
-        p1 = (1 - opt) * pulse(x, sigma, 4 * gap)
-        p2 = pulse(x, sigma, 3 * gap)
-        p3 = (1 + opt) * pulse(x, sigma, 2 * gap)
-        p4 = (1 - opt) * pulse(x, sigma, -2 * gap)
-        p5 = pulse(x, sigma, -3 * gap)
-        p6 = (1 + opt) * pulse(x, sigma, -4 * gap)
+        p1 = pulse(x, sigma, -3 * gap)
+        p2 = (1 - (opt / 6)) * pulse(x, sigma, -2 * gap)
+        p3 = (1 - (2 * opt / 6)) * pulse(x, sigma, -gap)
+        p4 = (1 - (3 * opt / 6)) * pulse(x, sigma, 0)
+        p5 = (1 - (4 * opt / 6)) * pulse(x, sigma, gap)
+        p6 = (1 - (5 * opt / 6)) * pulse(x, sigma, 2 * gap)
+        p7 = (1 - opt) * pulse(x, sigma, 3 * gap)
 
-        dp1 = (1 - opt) * diff_pulse(x, sigma, 4 * gap)
-        dp2 = diff_pulse(x, sigma, 3 * gap)
-        dp3 = (1 + opt) * diff_pulse(x, sigma, 2 * gap)
-        dp4 = (1 - opt) * diff_pulse(x, sigma, -2 * gap)
-        dp5 = diff_pulse(x, sigma, -3 * gap)
-        dp6 = (1 + opt) * diff_pulse(x, sigma, -4 * gap)
+        dp1 = diff_pulse(x, sigma, -3 * gap)
+        dp2 = (1 - (opt / 6)) * diff_pulse(x, sigma, -2 * gap)
+        dp3 = (1 - (2 * opt / 6)) * diff_pulse(x, sigma, -gap)
+        dp4 = (1 - (3 * opt / 6)) * diff_pulse(x, sigma, 0)
+        dp5 = (1 - (4 * opt / 6)) * diff_pulse(x, sigma, gap)
+        dp6 = (1 - (5 * opt / 6)) * diff_pulse(x, sigma, 2 * gap)
+        dp7 = (1 - opt) * diff_pulse(x, sigma, 3 * gap)
 
-        pot = p1 + p2 + p3 + p4 + p5 + p6
-        dpot = dp1 + dp2 + dp3 + dp4 + dp5 + dp6
-
+        pot = p1 + p2 + p3 + p4 + p5 + p6 + p7
+        dpot = dp1 + dp2 + dp3 + dp4 + dp5 + dp6 + dp7
         return {'v': pot,
                 'dv': dpot,
                 'h_mod': barrier_height / pot.max()
                 }
-
 
     @njit
     def v(x, t=0):
@@ -151,9 +148,9 @@ def run_in_parallel(opt, param):
         :return: The potential as a function of x (and t if relevant)
         """
         pot = barrier(x)
-        edge_potential = pulse(x, (pos_amplitude / 10) * sigma, pos_amplitude) + \
-                         pulse(x, (pos_amplitude / 10) * sigma, -pos_amplitude)
-        return pot['h_mod'] * (pot['v'] + 10 * edge_potential)
+        edge_potential = pulse(x, (pos_amplitude / 5) * sigma, pos_amplitude) + \
+                         pulse(x, (pos_amplitude / 5) * sigma, -pos_amplitude)
+        return pot['h_mod'] * (pot['v'] + 15 * edge_potential)
 
     @njit
     def diff_v(x, t=0):
@@ -164,9 +161,9 @@ def run_in_parallel(opt, param):
         :return: Derivative of the potential as a function of x (and t if relevant)
         """
         pot = barrier(x)
-        edge_potentials = diff_pulse(x, (pos_amplitude / 10) * sigma, pos_amplitude) + \
-                          diff_pulse(x, (pos_amplitude / 10) * sigma, -pos_amplitude)
-        return pot['h_mod'] * (pot['dv'] + 10 * edge_potentials)
+        edge_potentials = diff_pulse(x, (pos_amplitude / 7.5) * sigma, pos_amplitude) + \
+                          diff_pulse(x, (pos_amplitude / 7.5) * sigma, -pos_amplitude)
+        return pot['h_mod'] * (pot['dv'] + 15 * edge_potentials)
 
     param['v'] = v
     param['diff_v'] = diff_v
@@ -182,17 +179,20 @@ def run_in_parallel(opt, param):
 
 if __name__ == '__main__':
     print('Waist size is {} um'.format(gpe.convert_x(waist, -6)))
-    n_iters = 2
-    kick = 50
-    savespath = './Archive_Data/DoublePotential-{}_iterations-{}T-{}Height-{}Kick/'.format(
-        n_iters, T, barrier_height, kick)
+    n_iters = 1
+    kick = 75
+
+    savespath = './Archive_Data/' + utlt.replace(
+        'ERRORTESTING6-{}_iterations-{}T-{:.4e}Height-{}Kick-{}XRanges/'.format(
+            n_iters, T, barrier_height, kick, pos_amplitude))
     if os.path.exists(savespath):
         print('Warning! Directory: {} Exists. You may be overwriting previous results.'.format(savespath))
     else:
         os.mkdir(savespath)
-    filename = 'DoubleBarrier-{}T-{}Height'.format(T, barrier_height)
+        print('Successfully created directory at the following location: {}'.format(savespath))
+    filename = utlt.replace('SingleBarrier-{}T-{:.4e}Height-{}Kick'.format(T, barrier_height, kick))
 
-    prob_region = 0.4
+    prob_region = 0.46
     # To do, move cooling here pleeeease, that way it only runs twice
     left_cool_params = dict(
         x_grid_dim=pos_grid_dim,
@@ -220,6 +220,7 @@ if __name__ == '__main__':
         N=N,
         k=k,
         dt=prop_dt,
+        epsilon=1e-3,
         init_state=left_init,
         initial_trap=initial_trap,
         diff_k=diff_k,
@@ -280,12 +281,13 @@ if __name__ == '__main__':
             origin='lower',
             extent=extent,
             aspect=(extent[1] - extent[0]) / (extent[-1] - extent[-2]),
-            norm=SymLogNorm(vmin=1e-7, vmax=1., linthresh=1e-8)
+            norm=SymLogNorm(vmin=1e-14, vmax=1., linthresh=1e-17)
         )
         plt.xlabel('Coordinate $x$ (a.u.)')
         plt.ylabel('Time $t$ (a.u.)')
         plt.colorbar()
         plt.savefig(savespath + plot_title + '.pdf')
+        plt.show()
 
     plt.close('all')
 
@@ -294,7 +296,7 @@ if __name__ == '__main__':
         l2r = res_lib[_]['left']
         r2l = res_lib[_]['right']
         x_um = gpe.convert_x(res_lib[_]['left']['x'], -6)
-        t_ms = gpe.convert_time(times, -6)
+        t_ms = gpe.convert_time(times, -3)
         l_size = l2r['x'].size  # Create size parameter for probability evaluation
         r_size = r2l['x'].size  # Ensure left and right sizes are the same
         l_cut = int((1 - prob_region) * l_size)  # Use size parameter for Left-to-Right probability
@@ -306,9 +308,9 @@ if __name__ == '__main__':
         figure_number += 1
         plot_title = 'TunnelingProbability-{}param'.format(_)
         plt.plot(t_ms, T_l2r, label='Tunneling probability from Left to Right')
-        plt.plot(t_ms, T_l2r, label='Tunneling probability from Left to Right')
-        plt.xlabel('Coordinate $x (\mu$m))')
-        plt.ylabel('Time $t (\mu$s)')
+        plt.plot(t_ms, T_r2l, label='Tunneling probability from Right to Left')
+        plt.xlabel('Time $t$ (ms)')
+        plt.ylabel('$\int\| \Psi (x) \|^2 dx$')
         plt.legend(loc='upper left')
         plt.tight_layout()
         plt.savefig(savespath + plot_title + '.pdf')
@@ -326,7 +328,7 @@ if __name__ == '__main__':
         plt.plot(x_um, potential)
         # plt.plot(x_um, gpe.convert_energy(r2l['parameters']['v'](r2l['x']), -9))
         plt.plot(x_line, en_left, label='Average Energy L2R')
-        if np.abs(en_left[0]-en_right[0]) > (0.001 * en_left[0]):
+        if np.abs(en_left[0]-en_right[0]) > np.abs(0.001 * en_left[0]):
             plt.plot(x_line, en_right, label='Average Energy r2l')
         plt.fill_between(
             x_um[l_cut:],
@@ -346,14 +348,14 @@ if __name__ == '__main__':
         )
         plt.xlabel('Coordinate $x (\mu$m))')
         plt.ylabel('Energy $E$ (nK)')
-        plt.ylim(-0.1, 1.1*gpe.convert_energy(r2l['parameters']['v'](r2l['x']), -9).max())
+        plt.ylim(-0.1, 0.75 * gpe.convert_energy(r2l['parameters']['v'](r2l['x']), -9).max())
         plt.legend(loc='upper center')
         plt.tight_layout()
         plt.savefig(savespath + plot_title + '.pdf')
-        TP_lib[_] = {'l2r': T_l2r, 'r2l': T_r2l, 'diff': np.sum(np.abs(T_l2r - T_r2l))}
+        TP_lib[_] = {'l2r': T_l2r, 'r2l': T_r2l, 'diff': np.sum(np.abs(T_l2r - T_r2l)) * prop_dt}
 
         # Plot tests of the Ehrenfest theorems
-        figefr = plt.figure(figure_number, figsize=(24,6))
+        figefr = plt.figure(figure_number, figsize=(24, 6))
         plot_title = 'EFT-{}param'.format(_)
         figure_number += 1
         time = l2r['times']
@@ -398,6 +400,7 @@ if __name__ == '__main__':
         plt.ylabel('$dt$')
         plt.xlabel('Time Step')
         plt.savefig(savespath + plot_title + '.pdf')
+        plt.show()
         plt.close('all')
 
     plt.figure(figure_number)

@@ -16,11 +16,16 @@ class BEC:
     """
 
     def __init__(self, atom='R87', number_of_atoms=1e4, omega_x=100 * np.pi, omega_y=1000 * np.pi, omega_z=1000 * np.pi,
-                 omega_cooling=900 * np.pi, kicked=False):
+                 kicked=False):
         """
-
+        Creates an instance of a BEC. This is done to reduce the amount of lines for
         :param str atom: Specify R87 of K41 for rubidium or Potassium BEC respectively
-        :param int number_of_atoms: Number of atoms for BEC
+        :param int|float number_of_atoms: Number of atoms for BEC
+        :param int|float omega_x: The frequency of the trapping potential along the axis of propagation
+        :param int|float omega_y: The frequency of the trapping potential along a perpendicular axis
+        :param int|float omega_z: The frequency of the trapping potential along a perpendicular axis
+        :param bool kicked: Are you giving the BEC an initial momentum kick? If so, you need to specify here
+
         """
         # Define physical parameters
         self.a_0 = 5.291772109e-11  # Bohr Radius in meters
@@ -38,7 +43,6 @@ class BEC:
         self.omega_x = omega_x  # Harmonic oscillation in the x-axis in 2pi Hz (radians per second)
         self.omega_y = omega_y  # Harmonic oscillation in the y-axis in 2pi Hz (radians per second)
         self.omega_z = omega_z  # Harmonic oscillation in the z-axis in 2pi Hz (radians per second)
-        self.omeg_cooling = omega_cooling  # Harmonic oscillation for the trapping potential in Hz (if needed)
 
         if atom == "R87":
             self.mass = self.m_R87
@@ -81,14 +85,32 @@ class BEC:
         """
         return self.qatc(position) * self.L_x * 10 ** (-order)
 
+    def dimless_x(self, position, order):
+        """
+        Takes a physical quantity of some order of meters and converts them to dimensionless units
+        :param int|float|np.ndarray position: Pass a point or np.array to be converted
+        :param int|float order: Specify the order, X, for 1eX meters. For example, to convert to micrometers, X=-6
+        :return: Position grid in Xm, where X is the order of the units you desire. Eg. nanometers = 1e-9 meters
+        """
+        return self.qatc(position) / (self.L_x * (10 ** -order))
+
     def convert_time(self, time, order):
         """
-
+        Takes dimensionless time and converts it to some order of seconds
         :param int|float|np.ndarray time: Pass a point in time or np.array to be converted
         :param int|float order: Specify the order, X, with respect to seconds. Eg. for milliseconds, X=-3
         :return: Time point or time grid in order Xs, where X is the order of the units you want. Eg. nanoseconds, X=-9
         """
         return self.qatc(time) * (10 ** -order) / self.omega_x
+
+    def dimless_time(self, time, order):
+        """
+        Takes time in some order of seconds and converts it to dimensionless units
+        :param int|float|np.ndarray time: Pass a point in time or np.array to be converted
+        :param int|float order: Specify the order, X, with respect to seconds. Eg. for milliseconds, X=-3
+        :return: Time point or time grid in order Xs, where X is the order of the units you want. Eg. nanoseconds, X=-9
+        """
+        return self.qatc(time) * self.omega_x * (10 ** order)
 
     def convert_energy(self, energy, order, units='K'):
         """
@@ -102,6 +124,19 @@ class BEC:
         if units == 'K':
             energy /= Boltzmann
         return energy * 10 ** -order
+
+    def dimless_energy(self, energy, order, units='K'):
+        """
+        Converts energy in units of some order of either Joules or Kelvin and converts it to dimensionless units
+        :param int|float|np.ndarray energy: dimensionless energy
+        :param int|float order: Specify the order, X, with respect to Joules or Kelvin. Eg, for microKelvin, X=-6
+        :param str units:
+        :return:
+        """
+        energy = self.qatc(energy) / (hbar * self.omega_x)
+        if units == 'K':
+            energy *= Boltzmann
+        return energy * 10 ** order
 
     def convert_dens(self, density, order):
         """
@@ -227,14 +262,6 @@ class BEC:
                                ('hamiltonian_average', list), ('time_increments', list), ('dx', '<f4'),
                                ('x', type(gpe_propagator.x)), ('parameters', dict)]
                         )
-
-    def get_tag(self, params):
-        """
-        Creates a unique tag for saving
-        :param params: parameters used for the experiment
-        :return:
-        """
-        return 0
 
 
 def replace(string_for_replacement):

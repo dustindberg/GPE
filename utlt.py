@@ -274,6 +274,30 @@ def replace(string_for_replacement):
     return str(string_for_replacement).replace('.', ',')
 
 
+@njit
+def pulse(pos_grid, width, center):
+    """
+    Adjustable width Gaussian. Passed as a function for repeated use and readability
+    :param pos_grid:
+    :param center:
+    :param width:
+    :return:
+    """
+    return np.exp(-0.5 * ((pos_grid - center) / width) ** 2)
+
+
+@njit
+def diff_pulse(pos_grid, width, center):
+    """
+    Derivative of the Gaussian pulse
+    :param pos_grid:
+    :param center:
+    :param width:
+    :return:
+    """
+    return -(pos_grid - center) / (width ** 2) * np.exp(-0.5 * ((pos_grid - center) / width) ** 2)
+
+
 def paint_potential(x, w, t, sampling_freq):
     """
 

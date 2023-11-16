@@ -60,6 +60,8 @@ def diff_k(p):
 # Trap Frequencies for creating the Quasi-1D case
 propagation_freq = 0.5 * 2 * np.pi          # Frequency of the shallow trap along axis of propagation (we use x-axis)
 perpendicular_freqs = 200 * 2 * np.pi       # Frequency of the axes perpendicular to propagation (we use y- and z-axis)
+target_bounds = 100                          # Target bounds in micrometers. This is to either side.
+subtractive_barrier = 1000                  # Height of barrier in nanoKelvin if you are using a subtractive gaussian
 
 atom_params = dict(
     atom='R87',
@@ -74,7 +76,7 @@ g = gpe.g
 N = gpe.N
 
 # Beam Parameters
-waist = gpe.dimless_x(25, -6)               # Dimensionless waist of the gaussian beam (converted from physical units)
+waist = gpe.dimless_x(25, -6)        # Dimensionless waist of the gaussian beam (converted from physical units)
 sigma = waist / 2                           # Delta = sqrt(2) sigma, such that delta^2 = 2 * sigma^2
 fwhm = 2 * sigma * np.sqrt(2 * np.log(2))   # Full Width, Half Maximum (used for spacing parameters)
 delta = 2 * sigma ** 2                      # Minimum Width Parameter for the Gaussian function, pulse()
@@ -83,7 +85,8 @@ barrier_height = gpe.dimless_energy(120, -9, 'K')  # Dimensionless height of the
 
 # Create the position grid and times
 pos_grid_dim = 2 ** 14          # Resolution for the position grid (in our case, this is the x-axis resolution)
-pos_amplitude = 85              # Code is always centered about 0, so +/- amplitude are the bounds of the position grid
+
+pos_amplitude = gpe.dimless_x(target_bounds, -6)    # Code is always centered about 0, so +/- amplitude are the bounds of the position grid
 tp_cut = 0.46                   # % of position grid to integrate over for tunneling
 T = 1.0                         # Final time. Declare as a separate parameter for conversions
 times = np.linspace(0, T, 500)  # Time grid: required a resolution of 500 for split operator class
@@ -116,27 +119,24 @@ def run_in_parallel(opt, param):
         :param x:
         :return:
         """
-        p1 = pulse(x, sigma, -3 * gap)
-        p2 = (1 - (opt / 6)) * pulse(x, sigma, -2 * gap)
-        p3 = (1 - (2 * opt / 6)) * pulse(x, sigma, -gap)
-        p4 = (1 - (3 * opt / 6)) * pulse(x, sigma, 0)
-        p5 = (1 - (4 * opt / 6)) * pulse(x, sigma, gap)
-        p6 = (1 - (5 * opt / 6)) * pulse(x, sigma, 2 * gap)
-        p7 = (1 - opt) * pulse(x, sigma, 3 * gap)
+        p1 = utlt.pulse(x, sigma, -4*sigma)
+        p2 = utlt.pulse(x, sigma, 4*sigma)
+        p3 = utlt.pulse(x, sigma, sigma)
+        p4 = (1 - opt) * utlt.pulse(x, sigma, -sigma)
+        asymmetry = p3 + p4
+        asymmetry /= asymmetry.max()
 
-        dp1 = diff_pulse(x, sigma, -3 * gap)
-        dp2 = (1 - (opt / 6)) * diff_pulse(x, sigma, -2 * gap)
-        dp3 = (1 - (2 * opt / 6)) * diff_pulse(x, sigma, -gap)
-        dp4 = (1 - (3 * opt / 6)) * diff_pulse(x, sigma, 0)
-        dp5 = (1 - (4 * opt / 6)) * diff_pulse(x, sigma, gap)
-        dp6 = (1 - (5 * opt / 6)) * diff_pulse(x, sigma, 2 * gap)
-        dp7 = (1 - opt) * diff_pulse(x, sigma, 3 * gap)
 
-        pot = p1 + p2 + p3 + p4 + p5 + p6 + p7
-        dpot = dp1 + dp2 + dp3 + dp4 + dp5 + dp6 + dp7
+        dp1 = utlt.diff_pulse(x, sigma, -4*sigma)
+        dp2 = utlt.diff_pulse(x, sigma, 4*sigma)
+        dp3 = utlt.diff_pulse(x, sigma, sigma)
+        dp4 = (1 - opt) * diff_pulse(x, sigma, -sigma)
+
+        pot = 1 - (p1 + p2 + p3 / asymmetry.max() + p4 / asymmetry.max())
+        dpot = -(dp1 + dp2 + dp3 + dp4)
         return {'v': pot,
                 'dv': dpot,
-                'h_mod': barrier_height / pot.max()
+                'h_mod': barrier_height/asymmetry.max()
                 }
 
     @njit
@@ -148,9 +148,9 @@ def run_in_parallel(opt, param):
         :return: The potential as a function of x (and t if relevant)
         """
         pot = barrier(x)
-        edge_potential = pulse(x, (pos_amplitude / 5) * sigma, pos_amplitude) + \
-                         pulse(x, (pos_amplitude / 5) * sigma, -pos_amplitude)
-        return pot['h_mod'] * (pot['v'] + 15 * edge_potential)
+        #edge_potential = pulse(x, (pos_amplitude / 5) * sigma, pos_amplitude) + \
+        #                 pulse(x, (pos_amplitude / 5) * sigma, -pos_amplitude)
+        return pot['h_mod'] * (1 - pot['v'])
 
     @njit
     def diff_v(x, t=0):
@@ -161,9 +161,7 @@ def run_in_parallel(opt, param):
         :return: Derivative of the potential as a function of x (and t if relevant)
         """
         pot = barrier(x)
-        edge_potentials = diff_pulse(x, (pos_amplitude / 7.5) * sigma, pos_amplitude) + \
-                          diff_pulse(x, (pos_amplitude / 7.5) * sigma, -pos_amplitude)
-        return pot['h_mod'] * (pot['dv'] + 15 * edge_potentials)
+        return pot['dv']
 
     param['v'] = v
     param['diff_v'] = diff_v
@@ -183,7 +181,7 @@ if __name__ == '__main__':
     kick = 75
 
     savespath = './Archive_Data/' + utlt.replace(
-        'ERRORTESTING6-{}_iterations-{}T-{:.4e}Height-{}Kick-{}XRanges/'.format(
+        'OptimizeThing-{}_iterations-{}T-{:.4e}Height-{}Kick-{}XRanges/'.format(
             n_iters, T, barrier_height, kick, pos_amplitude))
     if os.path.exists(savespath):
         print('Warning! Directory: {} Exists. You may be overwriting previous results.'.format(savespath))

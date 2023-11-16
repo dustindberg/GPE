@@ -55,18 +55,18 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
         pass
 
     # allocate the array for wave function
-    wavefunction = pyfftw.empty_aligned(x_grid_dim, dtype=np.complex)
+    wavefunction = pyfftw.empty_aligned(x_grid_dim, dtype=complex)
 
     # allocate the array for wave function in momentum representation
-    wavefunction_p = pyfftw.empty_aligned(x_grid_dim, dtype=np.complex)
+    wavefunction_p = pyfftw.empty_aligned(x_grid_dim, dtype=complex)
 
     # allocate the array for calculating the momentum representation for the energy evaluation
-    wavefunction_p_ = pyfftw.empty_aligned(x_grid_dim, dtype=np.complex)
+    wavefunction_p_ = pyfftw.empty_aligned(x_grid_dim, dtype=complex)
 
     # parameters for FFT
     fft_params = {
         "flags": ('FFTW_MEASURE', 'FFTW_DESTROY_INPUT'),
-        "threads": cpu_count(),     # removed cpu_count() from here and replaced with threads
+        "threads": threads,     # removed cpu_count() from here and replaced with threads
         "planning_timelimit": 60,
     }
 
@@ -266,21 +266,21 @@ class SplitOpGPE1D(object):
             pass
 
         # allocate the array for wave function
-        self.wavefunction = pyfftw.empty_aligned(x_grid_dim, dtype=np.complex)
+        self.wavefunction = pyfftw.empty_aligned(x_grid_dim, dtype=complex)
 
         # allocate an extra copy for the wavefunction necessary for adaptive time step propagation
-        self.wavefunction_next = pyfftw.empty_aligned(self.x_grid_dim, dtype=np.complex)
+        self.wavefunction_next = pyfftw.empty_aligned(self.x_grid_dim, dtype=complex)
 
         # allocate the array for wave function in momentum representation
-        self.wavefunction_next_p = pyfftw.empty_aligned(x_grid_dim, dtype=np.complex)
+        self.wavefunction_next_p = pyfftw.empty_aligned(x_grid_dim, dtype=complex)
 
         # allocate the array for calculating the momentum representation for the energy evaluation
-        self.wavefunction_next_p_ = pyfftw.empty_aligned(x_grid_dim, dtype=np.complex)
+        self.wavefunction_next_p_ = pyfftw.empty_aligned(x_grid_dim, dtype=complex)
 
         # parameters for FFT
         self.fft_params = {
             "flags": ('FFTW_MEASURE', 'FFTW_DESTROY_INPUT'),
-            "threads": cpu_count(),                                       #Removed cpu_count from here
+            "threads": threads,                                       # Removed cpu_count from here
             "planning_timelimit": 60,
         }
 
@@ -637,7 +637,7 @@ class SplitOpGPE1D(object):
                 "The grid size does not match with the wave function"
 
             # make sure the wavefunction is stored as a complex array
-            np.copyto(self.wavefunction, wavefunc.astype(np.complex))
+            np.copyto(self.wavefunction, wavefunc.astype(complex))
 
         else:
             self.wavefunction[:] = wavefunc(self.x)

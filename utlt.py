@@ -179,6 +179,7 @@ class BEC:
 
         return init_state, mu
 
+    @njit(parallel=True)
     def run_single_case(self, params):
         """
         Does a single propagation of a BEC. Since interaction parameter, g, is specified here, this can be used for

@@ -83,7 +83,7 @@ asym_position = 1 * sigma
 well_center = 3 * sigma
 
 
-#@njit
+@njit
 def static_potential(x, asymmetry):
     left_barrier = (2 * max_asymmetry - asymmetry) * utlt.pulse(x, sigma, -asym_position)
     left_correction = utlt.pulse(x, sigma, -well_center) * (
@@ -125,3 +125,7 @@ plt.axvline(-well_center, color=ok['red'])
 #plt.legend(loc='lower left')
 
 plt.show()
+
+if __name__ == '__main__':
+    print('done')
+

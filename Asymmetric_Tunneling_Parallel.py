@@ -12,6 +12,8 @@ import pickle as pickle
 from multiprocessing import Pool
 import os
 
+from tqdm import tqdm
+
 
 # Start timing for optimizing runs
 Start_time = datetime.datetime.now(pytz.timezone('US/Central'))
@@ -78,10 +80,15 @@ filename = 'G_' + replace(str(g))
 savesfolder = filename
 parent_dir = "./Archive_Data"
 path = os.path.join(parent_dir, savesfolder)
-os.mkdir(path)
+try:
+    os.mkdir(path)
+    print("Directory '%s' created" % savesfolder)
+except:
+    FileExistsError
+    print('WARNING: The directory you are saving to already exists')
+
 savespath = 'Archive_Data/' + str(savesfolder) + '/'
 
-print("Directory '%s' created" % savesfolder)
 
 
 # Functions for computation
@@ -187,7 +194,7 @@ def run_single_case(params):
 
     # propagate till time T and for each time step save a probability density
     gpe_wavefunctions = [
-        gpe_propagator.propagate(t).copy() for t in params['times']
+        gpe_propagator.propagate(t).copy() for t in tqdm(params['times'])
     ]
 
     ####################################################################################################################
@@ -206,7 +213,7 @@ def run_single_case(params):
 
     # Propagate till time T and for each time step save a probability density
     schrodinger_wavefunctions = [
-        schrodinger_propagator.propagate(t).copy() for t in params['times']
+        schrodinger_propagator.propagate(t).copy() for t in tqdm(params['times'])
     ]
 
     # bundle results into a dictionary

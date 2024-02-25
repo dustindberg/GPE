@@ -34,25 +34,24 @@ ok = {
 }
 
 plt_params = {
-        'figure.figsize': (8, 6),
-        'figure.dpi': 300,
-        'legend.fontsize': 16,
-        'axes.labelsize': 16,
-        'axes.titlesize': 16,
-        'axes.prop_cycle': plt.cycler('color', (ok[_] for _ in ok)),
-        'xtick.labelsize': 16,
-        'ytick.labelsize': 16,
-        'lines.linewidth': 3.5,
-        }
+    'figure.figsize': (8, 6),
+    'figure.dpi': 300,
+    'legend.fontsize': 10,
+    'axes.labelsize': 16,
+    'axes.titlesize': 16,
+    'axes.prop_cycle': plt.cycler('color', (ok[_] for _ in ok)),
+    'xtick.labelsize': 16,
+    'ytick.labelsize': 16,
+    'lines.linewidth': 3.5,
+}
 plt.rcParams.update(plt_params)
-
 
 ########################################################################################################################
 # Get the BEC
 ########################################################################################################################
 
-propagation_freq = 0.5 * 2 * np.pi          # Frequency of the shallow trap along axis of propagation (we use x-axis)
-perpendicular_freqs = 200 * 2 * np.pi       # Frequency of the axes perpendicular to propagation (we use y- and z-axis)
+propagation_freq = 0.5 * 2 * np.pi  # Frequency of the shallow trap along axis of propagation (we use x-axis)
+perpendicular_freqs = 200 * 2 * np.pi  # Frequency of the axes perpendicular to propagation (we use y- and z-axis)
 
 atom_params = dict(
     atom='R87',
@@ -67,10 +66,10 @@ g = gpe.g
 N = gpe.N
 
 # Declare Physical parameters
-bounds = 100         # Declare the boundaries in physical units (micrometers)
-waist = 23        # Declare the inter-gaussian spacing in physical units (micrometers)
+bounds = 100  # Declare the boundaries in physical units (micrometers)
+waist = 23  # Declare the inter-gaussian spacing in physical units (micrometers)
 sigma = waist / 2
-trap_height = 60    # Declare the trap height/depth in physical units (microKelvin)
+trap_height = 60  # Declare the trap height/depth in physical units (microKelvin)
 th_coding = gpe.dimless_energy(trap_height, -6, units='K')
 resolution = 2 ** 14
 
@@ -78,54 +77,96 @@ dz = 2. * bounds / resolution
 
 # generate coordinate range
 z = (np.arange(resolution) - resolution / 2) * dz
-max_asymmetry = 0.25
-asym_position = 1 * sigma
+max_asymmetry = 0.5
+asym_position = sigma
 well_center = 3 * sigma
+barrier_height = 0.5
+T = 3
+times = np.linspace(0, T, 500)
+
+
+# @njit
+def asymmetry_potential(x, asymmetry):
+    # Define the asymmetric barriers
+    left_asymmetry = (1 - asymmetry) * utlt.pulse(x, sigma, -asym_position)
+    right_asymmetry = utlt.pulse(x, sigma, asym_position)
+    asymmetric_barrier = left_asymmetry + right_asymmetry
+    height_mod = (1 + 0.5 * asymmetry) * barrier_height / asymmetric_barrier.max()
+    asymmetric_barrier *= height_mod
+    left_correction_amplitude = height_mod * (
+            (1 - asymmetry) * utlt.pulse(-well_center, sigma, -asym_position) +
+            utlt.pulse(-well_center, sigma, asym_position)
+    )
+    left_well_correction = -left_correction_amplitude * utlt.pulse(x, sigma, -well_center)
+
+    # Define the right portion of the barrier
+
+    right_correction_amplitude = height_mod * (
+            (1 - asymmetry) * utlt.pulse(well_center, sigma, -asym_position) +
+            utlt.pulse(well_center, sigma, asym_position)
+    )
+    right_well_correction = -right_correction_amplitude * utlt.pulse(x, sigma, well_center)
+    return asymmetric_barrier + left_well_correction + right_well_correction
 
 
 @njit
-def static_potential(x, asymmetry):
-    left_barrier = (2 * max_asymmetry - asymmetry) * utlt.pulse(x, sigma, -asym_position)
-    left_correction = utlt.pulse(x, sigma, -well_center) * (
-            (2 * max_asymmetry - asymmetry) * utlt.pulse(-well_center, sigma, -asym_position) +
-            (2 * max_asymmetry + asymmetry) * utlt.pulse(-well_center, sigma, asym_position))
-    right_barrier = (2 * max_asymmetry + asymmetry) * utlt.pulse(x, sigma, asym_position)
-    right_correction = utlt.pulse(x, sigma, well_center) * (
-            (2 * max_asymmetry + asymmetry) * utlt.pulse(well_center, sigma, asym_position) +
-            (2 * max_asymmetry - asymmetry) * utlt.pulse(well_center, sigma, -asym_position))
-    return left_barrier - left_correction + right_barrier - right_correction
+def left_barrier(x):
+    return utlt.pulse(x, sigma, -well_center)
 
 
 @njit
-def opposite_barrier(x):
-    return trap_height * utlt.pulse(x, sigma, well_center)
+def right_barrier(x):
+    return utlt.pulse(x, sigma, well_center)
 
-@njit
-def init_barrier(x):
-    return trap_height * utlt.pulse(x, sigma, -well_center)
+
+def path(x_0, x_f, t, time_stop=times.max(), path_type='sinusoid'):
+    t = np.array(t)
+    length = (x_f - x_0) / 2
+    tracked_time = t[t <= time_stop]
+    if path_type == 'sinusoid':
+        tracked_position = np.array(x_0 + length * (1 - np.cos(tracked_time * np.pi / time_stop)))
+    if path_type == 'half sine':
+        tracked_position = np.array(x_0 + 2 * length * (1 - np.cos(tracked_time * np.pi / (2 * time_stop))))
+
+    if time_stop != t[-1]:
+        untracked_time = t[t > time_stop]
+        stationary = np.full(np.shape(untracked_time), x_f)
+        complete_path = np.concatenate((tracked_position, stationary))
+        return complete_path
+    else:
+        return tracked_position
+
 
 
 plt.figure()
 for _ in np.linspace(0, max_asymmetry, 11):
     def v(x, t=0):
-        static = trap_height * static_potential(x, _)
-        #plt.plot(x, left_c, '-.', label='%.2f Left Correction' % _)
-        #plt.plot(x, right_c, '-.', label='%.2f Right Correction' % _)
-        #plt.plot(x, opposite_barrier(x), '-.')
-        #plt.plot(x, asymish, '-.')
+        static = asymmetry_potential(x, _) + left_barrier(x)
+        #left_correction = static_potential(-well_center, _)
+        #right_correction = static_potential(well_center, _)
+        # print('Corrections - Left: {}    Right: {}'.format(left_correction, right_correction))
+        # plt.plot(x, left_c, '-.', label='%.2f Left Correction' % _)
+        # plt.plot(x, right_c, '-.', label='%.2f Right Correction' % _)
+        # plt.plot(x, opposite_barrier(x), '-.')
+        # plt.plot(x, asymish, '-.')
+        #plt.plot(x, trap_height - static, '--')
+        # plt.plot(x, 1 - (1 - lc) * init_barrier(x), '-.')
         #plt.plot(x, static, '--')
-        #plt.plot(x, 1 - (1 - lc) * init_barrier(x), '-.')
-        #plt.plot(x, static, '--')
-        return (trap_height + 2) - (static + opposite_barrier(x) + init_barrier(x))
-    plt.plot(z, v(z), label='%.2f' % _)
-plt.plot(z, (trap_height + 2) - opposite_barrier(z), '--')
-plt.plot(z, (trap_height + 2) - init_barrier(z), '--')
-plt.axvline(well_center, color=ok['red'])
-plt.axvline(-well_center, color=ok['red'])
-#plt.legend(loc='lower left')
+        barrier = static + right_barrier(x)
+        return trap_height * (1 - barrier)
 
+
+    #print('Asymmetry: {}    Left Well: {}    Right Well: {}'.format(_, v(-well_center), v(well_center)))
+    #plt.plot(z, v(z), label='%.2f' % _)
+#plt.plot(z, trap_height - left_barrier(z), '--')
+#plt.plot(z, trap_height - right_barrier(z), '--')
+#plt.axvline(well_center, color=ok['red'])
+#plt.axvline(-well_center, color=ok['red'])
+#plt.legend(loc='lower left')
+#plt.show()
+
+plt.plot(times, path(-2 * well_center, -well_center, times, time_stop=0.5*T, path_type='sinusoid'))
 plt.show()
 
 if __name__ == '__main__':
     print('done')
-

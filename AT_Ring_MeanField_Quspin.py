@@ -49,7 +49,7 @@ plt.rcParams.update(plt_params)
 ########################################################################################################################
 # Define Model Parameters
 # Using Quspin, we will be solving the Gross-Pitaevskii equation (GPE)
-# i d/dt ψ_j(t) = -J[ψ_{j-1}(t) + ψ_{j+1}(t)] + V(x) ψ_j(t) + g|ψ_j(t)|² ψ_j(t)
+# i d/dt ψ_j(t) = -J[ψ_{j-1}(t) + ψ_{j+1}(t)] + V(j) ψ_j(t) + g|ψ_j(t)|² ψ_j(t)
 # For more information, see: https://github.com/weinbe58/QuSpin/blob/master/examples/notebooks/GPE.ipynb
 ########################################################################################################################
 from __future__ import print_function, division

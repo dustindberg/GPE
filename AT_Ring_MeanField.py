@@ -1,7 +1,9 @@
 from collections import namedtuple
 import numpy as np
+import scipy.ndimage
 from numba import jit, njit
 from scipy.integrate import ode
+from copy import deepcopy
 import matplotlib.pyplot as plt
 import h5py
 import os
@@ -33,6 +35,27 @@ def Hamiltonian(t: float, ψ: np.ndarray, qsys: quantum_system):
     return Hψ
 
 
+def get_energy(t: float, ψ: np.ndarray, qsys: quantum_system):
+    hop = qsys.J
+
+    Hψ = np.zeros_like(ψ)
+
+    Hψ[1:-1] = -hop * (ψ[:-2] + ψ[2:])
+
+    if qsys.is_open_boundary:
+        # imposing the open boundary conditions
+        Hψ[0] = - hop * ψ[1]
+        Hψ[-1] = - hop * ψ[-2]
+    else:
+        # imposing the periodic boundary conditions
+        Hψ[0] = -hop * (ψ[-1] + ψ[1])
+        Hψ[-1] = -hop * (ψ[-2] + ψ[0])
+
+    Hψ += (qsys.V + 0.5 * qsys.g * np.abs(ψ) ** 2) * ψ
+
+    return np.vdot(Hψ, ψ)
+
+
 def img_propagator(τ: float, n: int, qsys: quantum_system):
     time, dtimes = np.linspace(0, τ, n + 1, retstep=True)
 
@@ -50,7 +73,7 @@ def img_propagator(τ: float, n: int, qsys: quantum_system):
     # update the wavefunction of the system
     qsys.ψ[:] = ψ
 
-    return qsys
+#    return qsys
 
 
 def propagator(time: np.ndarray, qsys: quantum_system):
@@ -72,19 +95,15 @@ def propagator(time: np.ndarray, qsys: quantum_system):
 
 def get_current(wavefunction: np.ndarray, qsys: quantum_system):
     ψ = np.copy(wavefunction)
-    n_sites = len(ψ)
-    hop = qsys.J
-    ψ_star = ψ.conj()
-    current = []
-    for ψt in ψ:
-        ψt_plus = np.roll(ψt, -1, axis=0)
-        ψt_minus = np.roll(ψt, 1, axis=0)
-        ρ = 1j * hop * (
-            ψt.conj().T * (ψt_minus + ψt_plus)
-            - (ψt_minus + ψt_plus).conj().T * ψt
-            )
-        current.append(np.sum(ρ).real)
-    return current
+    ψ_plus = np.roll(ψ, -1, axis=1)
+    ψ_minus = np.roll(ψ, 1, axis=1)
+    current = -1j * qsys.J * (ψ_minus.conj() * ψ - ψ_minus * ψ.conj())
+    return current.sum(axis=1)
+
+
+def get_moving_avg(x):
+    return np.cumsum(x) / np.arange(1, x.size + 1)
+    #return scipy.ndimage.uniform_filter1d(x, N, mode='nearest')
 
 
 ########################################################################################################################
@@ -95,18 +114,18 @@ def get_current(wavefunction: np.ndarray, qsys: quantum_system):
 # Physical System Parameters
 L = 8              # Number of sites
 J = 1.0             # hopping strength
-g = 10.0            # Bose-Hubbard interaction strength
+g = 10.0           # Bose-Hubbard interaction strength
 τ_imag = 10         # Imaginary time propagation
 ni_steps = 1000     # Number of steps for imaginary time propagation
-t_prop = 10         # Time of propagation
-n_steps = t_prop * 200  # Number of steps for real-time propagation
+t_prop = 300         # Time of propagation
+n_steps = t_prop * 500  # Number of steps for real-time propagation
 times = np.linspace(0, t_prop, n_steps)
 # Set params for the potential
 cooling_potential_width = 0.5
 cooling_potential_offset = 0
 # Set params for
 n_ramps = 2                 # Define the number of ramps in the periodic potential
-ramp_height = 1 * J
+ramp_height = 1
 
 # calculate center of chain
 if L % 2 == 0:
@@ -153,6 +172,9 @@ def ring_with_ramp(j):
             ring[i] = ramp_height * ((j[i] - ramp_end[_]) / (ramp_start[_] - ramp_end[_]))
     return ring
 
+
+V_trapping = cooling_potential(sites)   # 5 * (np.arange(L) - j0) ** 2
+V_propagation = np.array([0, 1, 0.5, 0, 0, 1, 0.5, 0])  # ring_with_ramp(sites)
 
 ########################################################################################################################
 # Set the initial plotting parameters and the saving architecture
@@ -218,56 +240,101 @@ params = {
     'cooling_potential_width': cooling_potential_width,
     'cooling_potential_offset': cooling_potential_offset,
     'n_ramps': n_ramps,
-    'ramp_height': ramp_height
+    'ramp_height': ramp_height,
+    'init_potential': V_trapping,
+    'potential': V_propagation
 }
 
-"""with h5py.File(savespath+tag+'_data.hdf5', "w") as file:
+with h5py.File(savespath+tag+'_data.hdf5', "w") as file:
     parameters_save = file.create_group('params')
     file.create_group('GPE')
     file.create_group('SE')
     for _, __ in params.items():
-        parameters_save[_] = __"""
+        parameters_save[_] = __
 
 ########################################################################################################################
 # Establish systems and evolve
 ########################################################################################################################
-V_trapping = cooling_potential(sites)
-V_propagation = np.array([0, 1, 0.5, 0, 0, 1, 0.5, 0]) #ring_with_ramp(sites)
 
-# Define the quantum systems for the Schrödinger Gross-Pitaevskii equations
-qsys_gpe = quantum_system(J=J, g=g, V=cooling_potential(sites), ψ=np.ones(L, complex), is_open_boundary=False)
-qsys_se = quantum_system(J=J, g=0, V=cooling_potential(sites), ψ=np.ones(L, complex), is_open_boundary=False)
-qsys_gpe = img_propagator(τ_imag, ni_steps, qsys_gpe)
-qsys_se = img_propagator(τ_imag, ni_steps, qsys_se)
-
-"""with h5py.File(savespath+tag+'_data.hdf5', "a") as file:
-    gpe = file.group['GPE']
-    se = file.group['SE']
-    gpe.create_dataset('ground_state', data=qsys_gpe.ψ)
-    se.create_dataset('ground_state', data=qsys_se.ψ)"""
-
-# Set the propagation potential
-qsys_gpe.V[:] = V_propagation
-qsys_se.V[:] = V_propagation
-gpe_wavefunction = propagator(times, qsys_gpe)
-se_wavefunction = propagator(times, qsys_se)
-
-gpe_current = get_current(gpe_wavefunction, qsys_gpe)
-se_current = get_current(se_wavefunction,qsys_se)
-
-
-########################################################################################################################
-# Plot the results
-########################################################################################################################
 plt.figure(fnum)
 fnum+=1
-plt.plot(degrees, V_propagation, label='Ring')
-plt.plot(degrees, cooling_potential(sites), label='Cooling Potential')
+#plt.title('Potentials after Propagation')
+plt.plot(degrees, V_propagation, '*-', label='Ring Potential')
+plt.plot(degrees, V_trapping, '*-', label='Cooling Potential')
 plt.xlim(degrees[0], degrees[-1])
 plt.ylim(-0.01, 1.2*V_propagation.max())
 plt.legend()
 plt.tight_layout()
+plt.savefig(savespath+tag+'_Potentials.pdf')
+plt.savefig(savespath+tag+'_Potentials.png')
 
+# Define the quantum systems for the Schrödinger Gross-Pitaevskii equations
+init_qsys_gpe = quantum_system(J=J, g=g, V=deepcopy(V_trapping), ψ=np.ones(L, complex), is_open_boundary=False)
+init_qsys_se = quantum_system(J=J, g=0, V=deepcopy(V_trapping), ψ=np.ones(L, complex), is_open_boundary=False)
+img_propagator(τ_imag, ni_steps, init_qsys_gpe)
+img_propagator(τ_imag, ni_steps, init_qsys_se)
+
+with h5py.File(savespath+tag+'_data.hdf5', "a") as file:
+    file.create_dataset('GPE/ground_state', data=init_qsys_gpe.ψ)
+    file.create_dataset('SE/ground_state', data=init_qsys_se.ψ)
+
+"""plt.figure(fnum)
+fnum+=1
+plt.title(r"Initial state with")
+plt.plot(np.abs(init_qsys_gpe.ψ) ** 2, label=r"$g = %0.2f$"%g)
+plt.plot(np.abs(init_qsys_se.ψ) ** 2, label=r"$g = 0$")
+plt.ylabel("probability")
+plt.xlabel("site")
+plt.legend()
+plt.tight_layout()"""
+
+
+# Set the propagation potential
+qsys_gpe = quantum_system(J=J, g=g, V=V_propagation, ψ=deepcopy(init_qsys_gpe.ψ), is_open_boundary=False)
+qsys_se = quantum_system(J=J, g=0, V=V_propagation, ψ=deepcopy(init_qsys_se.ψ), is_open_boundary=False)
+gpe_wavefunction = propagator(times, qsys_gpe)
+se_wavefunction = propagator(times, qsys_se)
+
+gpe_current = get_current(gpe_wavefunction, qsys_gpe)
+gpe_vel = get_moving_avg(gpe_current)
+gpe_en = [get_energy(0, ψ, qsys_gpe) for ψ in gpe_wavefunction]
+se_current = get_current(se_wavefunction, qsys_se)
+se_vel = get_moving_avg(se_current)
+se_en = [get_energy(0, ψ, qsys_se) for ψ in se_wavefunction]
+
+print(f'Average current over propagation for \n Gpe: {gpe_current.mean()} \n Schrodinger: {se_current.mean()}')
+
+with h5py.File(savespath+tag+'_data.hdf5', "a") as file:
+    file.create_dataset('GPE/wavefunction', data=gpe_wavefunction)
+    file.create_dataset('GPE/current', data=gpe_current)
+    file.create_dataset('GPE/current_avgs', data=gpe_vel)
+    file.create_dataset('SE/wavefunction', data=se_wavefunction)
+    file.create_dataset('SE/current', data=se_current)
+    file.create_dataset('SE/current_avgs', data=se_vel)
+########################################################################################################################
+# Plot the results
+########################################################################################################################
+"""plt.figure(fnum)
+fnum+=1
+plt.title('Potentials after Propagation')
+plt.plot(degrees, V_propagation, label='Ring Declared')
+plt.plot(degrees, qsys_gpe.V, '-.', label='Potential')
+plt.plot(degrees, V_trapping, '--', label='Cooling Potential')
+plt.xlim(degrees[0], degrees[-1])
+plt.ylim(-0.01, 1.2*V_propagation.max())
+plt.legend()
+plt.tight_layout()"""
+
+plt.figure(fnum, figsize=(6, 3))
+fnum += 1
+plt.title('Energy')
+plt.plot(times,
+    [get_energy(0, ψ, qsys_gpe) for ψ in gpe_wavefunction],
+    label=r"$g=%0.2f$" % g
+)
+plt.tight_layout()
+plt.savefig(savespath+tag+'_Energy.pdf')
+plt.savefig(savespath+tag+'_Energy.png')
 
 plt.figure(fnum, figsize=(6, 3))
 fnum += 1
@@ -296,6 +363,8 @@ plt.imshow(
 plt.xticks(np.arange(degrees[0], degrees[-1], step=60))
 plt.ylabel("time")
 plt.colorbar()
+plt.savefig(savespath+tag+'_Density.pdf')
+plt.savefig(savespath+tag+'_Density.png')
 
 plt.figure(fnum)
 fnum += 1
@@ -303,5 +372,31 @@ plt.plot(times, gpe_current, label=r'$g=%0.2f$'%g)
 plt.plot(times, se_current, '--', label=r'$g=0$')
 plt.xlabel('Time')
 plt.ylabel('Current')
-plt.show()
+plt.legend()
+plt.tight_layout()
+plt.savefig(savespath+tag+'_Current.pdf')
+plt.savefig(savespath+tag+'_Current.png')
 
+plt.figure(fnum)
+fnum+=1
+plt.plot(times, gpe_vel, label=r'$g={}, N={}$'.format(g, 200))
+plt.plot(times, se_vel, '--', label=r'$g={}, N={}$'.format(0, 200))
+plt.xlabel('Time')
+plt.ylabel('Moving Avg')
+plt.legend()
+plt.tight_layout()
+plt.savefig(savespath+tag+'_Current_Average.pdf')
+plt.savefig(savespath+tag+'_Current_Average.png')
+
+"""plt.figure(fnum)
+fnum+=1
+plt.plot(np.abs(test).max(axis=1))
+
+plt.figure(fnum)
+fnum+=1
+plt.imshow(np.abs(test), aspect=18/2000)
+plt.colorbar()
+"""
+
+#plt.show()
+plt.close('all')

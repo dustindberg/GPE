@@ -93,7 +93,7 @@ def get_current(wavefunction: np.ndarray, qsys: quantum_system):
 # i d/dt ψ_j(t) = -J[ψ_{j-1}(t) + ψ_{j+1}(t)] + V(x) ψ_j(t) + g|ψ_j(t)|² ψ_j(t)
 ########################################################################################################################
 # Physical System Parameters
-L = 18              # Number of sites
+L = 8              # Number of sites
 J = 1.0             # hopping strength
 g = 10.0            # Bose-Hubbard interaction strength
 τ_imag = 10         # Imaginary time propagation
@@ -232,11 +232,11 @@ params = {
 # Establish systems and evolve
 ########################################################################################################################
 V_trapping = cooling_potential(sites)
-V_propagation = ring_with_ramp(sites)
+V_propagation = np.array([0, 1, 0.5, 0, 0, 1, 0.5, 0]) #ring_with_ramp(sites)
 
 # Define the quantum systems for the Schrödinger Gross-Pitaevskii equations
-qsys_gpe = quantum_system(J=J, g=g, V=V_trapping, ψ=np.ones(L, complex), is_open_boundary=False)
-qsys_se = quantum_system(J=J, g=0, V=V_trapping, ψ=np.ones(L, complex), is_open_boundary=False)
+qsys_gpe = quantum_system(J=J, g=g, V=cooling_potential(sites), ψ=np.ones(L, complex), is_open_boundary=False)
+qsys_se = quantum_system(J=J, g=0, V=cooling_potential(sites), ψ=np.ones(L, complex), is_open_boundary=False)
 qsys_gpe = img_propagator(τ_imag, ni_steps, qsys_gpe)
 qsys_se = img_propagator(τ_imag, ni_steps, qsys_se)
 
@@ -254,6 +254,20 @@ se_wavefunction = propagator(times, qsys_se)
 
 gpe_current = get_current(gpe_wavefunction, qsys_gpe)
 se_current = get_current(se_wavefunction,qsys_se)
+
+
+########################################################################################################################
+# Plot the results
+########################################################################################################################
+plt.figure(fnum)
+fnum+=1
+plt.plot(degrees, V_propagation, label='Ring')
+plt.plot(degrees, cooling_potential(sites), label='Cooling Potential')
+plt.xlim(degrees[0], degrees[-1])
+plt.ylim(-0.01, 1.2*V_propagation.max())
+plt.legend()
+plt.tight_layout()
+
 
 plt.figure(fnum, figsize=(6, 3))
 fnum += 1

@@ -112,9 +112,9 @@ def get_moving_avg(x):
 # i d/dt ψ_j(t) = -J[ψ_{j-1}(t) + ψ_{j+1}(t)] + V(x) ψ_j(t) + g|ψ_j(t)|² ψ_j(t)
 ########################################################################################################################
 # Physical System Parameters
-L = 8              # Number of sites
+L = 20              # Number of sites
 J = 1.0             # hopping strength
-g = 10.0           # Bose-Hubbard interaction strength
+g = 20.0           # Bose-Hubbard interaction strength
 τ_imag = 10         # Imaginary time propagation
 ni_steps = 1000     # Number of steps for imaginary time propagation
 t_prop = 300         # Time of propagation
@@ -174,8 +174,8 @@ def ring_with_ramp(j):
 
 
 V_trapping = cooling_potential(sites)   # 5 * (np.arange(L) - j0) ** 2
-V_propagation = np.array([0, 1, 0.5, 0, 0, 1, 0.5, 0])  # ring_with_ramp(sites)
-
+V_propagation = np.array([0, 0, 1, .8, .6, .4, 0.2, 0, 0, 0, 0, 0, 1, .8, .6, .4, .2, 0, 0, 0])  # ring_with_ramp(sites)
+r_width = 5
 ########################################################################################################################
 # Set the initial plotting parameters and the saving architecture
 ########################################################################################################################
@@ -211,8 +211,8 @@ extent = [degrees[0], degrees[-1], times[0], times[-1]]
 aspect = (degrees[-1] - degrees[0]) / (times[-1] - times[0])
 
 # Save file architecture
-tag = f'Ring_L{L}-T{t_prop}-J{J}-g{g:.2f}-n_ramps{n_ramps}'
-savesfolder = tag.replace('.', ',')
+tag = f'Ring_L{L}-T{t_prop}-J{J}-g{g:.2f}-ramp_width{r_width}'.replace('.', ',')
+savesfolder = tag
 parent_dir = "./Archive_Data/ODE_Solver"
 try:
     os.mkdir(parent_dir)
@@ -247,10 +247,8 @@ params = {
 
 with h5py.File(savespath+tag+'_data.hdf5', "w") as file:
     parameters_save = file.create_group('params')
-    file.create_group('GPE')
-    file.create_group('SE')
     for _, __ in params.items():
-        parameters_save[_] = __
+        parameters_save.create_dataset(_, data=__)
 
 ########################################################################################################################
 # Establish systems and evolve
@@ -274,9 +272,6 @@ init_qsys_se = quantum_system(J=J, g=0, V=deepcopy(V_trapping), ψ=np.ones(L, co
 img_propagator(τ_imag, ni_steps, init_qsys_gpe)
 img_propagator(τ_imag, ni_steps, init_qsys_se)
 
-with h5py.File(savespath+tag+'_data.hdf5', "a") as file:
-    file.create_dataset('GPE/ground_state', data=init_qsys_gpe.ψ)
-    file.create_dataset('SE/ground_state', data=init_qsys_se.ψ)
 
 """plt.figure(fnum)
 fnum+=1
@@ -305,12 +300,16 @@ se_en = [get_energy(0, ψ, qsys_se) for ψ in se_wavefunction]
 print(f'Average current over propagation for \n Gpe: {gpe_current.mean()} \n Schrodinger: {se_current.mean()}')
 
 with h5py.File(savespath+tag+'_data.hdf5', "a") as file:
-    file.create_dataset('GPE/wavefunction', data=gpe_wavefunction)
-    file.create_dataset('GPE/current', data=gpe_current)
-    file.create_dataset('GPE/current_avgs', data=gpe_vel)
-    file.create_dataset('SE/wavefunction', data=se_wavefunction)
-    file.create_dataset('SE/current', data=se_current)
-    file.create_dataset('SE/current_avgs', data=se_vel)
+    gpe_save = file.create_group('GPE')
+    se_save = file.create_group('SE')
+    gpe_save.create_dataset('ground_state', data=init_qsys_gpe.ψ)
+    gpe_save.create_dataset('wavefunction', data=gpe_wavefunction)
+    gpe_save.create_dataset('current', data=gpe_current)
+    gpe_save.create_dataset('current_avgs', data=gpe_vel)
+    se_save.create_dataset('ground_state', data=init_qsys_se.ψ)
+    se_save.create_dataset('wavefunction', data=se_wavefunction)
+    se_save.create_dataset('current', data=se_current)
+    se_save.create_dataset('current_avgs', data=se_vel)
 ########################################################################################################################
 # Plot the results
 ########################################################################################################################
@@ -379,10 +378,10 @@ plt.savefig(savespath+tag+'_Current.png')
 
 plt.figure(fnum)
 fnum+=1
-plt.plot(times, gpe_vel, label=r'$g={}, N={}$'.format(g, 200))
-plt.plot(times, se_vel, '--', label=r'$g={}, N={}$'.format(0, 200))
+plt.plot(times, gpe_vel, label=r'$g={}$'.format(g))
+plt.plot(times, se_vel, '--', label=r'$g={}$'.format(0))
 plt.xlabel('Time')
-plt.ylabel('Moving Avg')
+plt.ylabel('Cumulative Time Average')
 plt.legend()
 plt.tight_layout()
 plt.savefig(savespath+tag+'_Current_Average.pdf')

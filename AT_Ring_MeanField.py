@@ -1,8 +1,9 @@
 from collections import namedtuple
 import numpy as np
 import scipy.ndimage
-from numba import jit, njit
 from scipy.integrate import ode
+from numba import jit, njit
+from tqdm import tqdm
 from copy import deepcopy
 import matplotlib.pyplot as plt
 import h5py
@@ -65,7 +66,7 @@ def img_propagator(τ: float, n: int, qsys: quantum_system):
 
     ψ = np.copy(qsys.ψ)
 
-    for t in time[1:-1]:
+    for t in tqdm(time[1:-1]):
         solver.set_initial_value(ψ, t)
         ψ = solver.integrate(t + dtimes)
         ψ /= np.linalg.norm(ψ)
@@ -79,13 +80,13 @@ def img_propagator(τ: float, n: int, qsys: quantum_system):
 def propagator(time: np.ndarray, qsys: quantum_system):
     solver = ode(
         lambda t, ψ: -1j * Hamiltonian(t, ψ, qsys)
-    ).set_integrator('zvode')
+    ).set_integrator('zvode', atol=1E-12, rtol=1E-12)
 
     solver.set_initial_value(qsys.ψ, time[0])
 
     wavefunctions = [qsys.ψ.copy(), ]
     wavefunctions.extend(
-        solver.integrate(t) for t in time[1:]
+        solver.integrate(t) for t in tqdm(time[1:])
     )
 
     qsys.ψ[:] = wavefunctions[-1]
@@ -101,7 +102,7 @@ def get_current(wavefunction: np.ndarray, qsys: quantum_system):
     return current.sum(axis=1)
 
 
-def get_moving_avg(x):
+def get_cumulative_avg(x):
     return np.cumsum(x) / np.arange(1, x.size + 1)
     #return scipy.ndimage.uniform_filter1d(x, N, mode='nearest')
 
@@ -112,20 +113,21 @@ def get_moving_avg(x):
 # i d/dt ψ_j(t) = -J[ψ_{j-1}(t) + ψ_{j+1}(t)] + V(x) ψ_j(t) + g|ψ_j(t)|² ψ_j(t)
 ########################################################################################################################
 # Physical System Parameters
-L = 20              # Number of sites
-J = 1.0             # hopping strength
-g = 20.0           # Bose-Hubbard interaction strength
-τ_imag = 10         # Imaginary time propagation
-ni_steps = 1000     # Number of steps for imaginary time propagation
-t_prop = 300         # Time of propagation
-n_steps = t_prop * 500  # Number of steps for real-time propagation
+L = 10              # Number of sites
+J = 1.0            # hopping strength
+g = 0.00 * J        # Bose-Hubbard interaction strength
+τ_imag = 25        # Imaginary time propagation
+ni_steps = τ_imag * L ** 2        # Number of steps for imaginary time propagation
+t_prop = 300       # Time of propagation
+n_steps = t_prop * L ** 2    # Number of steps for real-time propagation
 times = np.linspace(0, t_prop, n_steps)
 # Set params for the potential
 cooling_potential_width = 0.5
 cooling_potential_offset = 0
 # Set params for
-n_ramps = 2                 # Define the number of ramps in the periodic potential
-ramp_height = 1
+n_ramps = 1                 # Define the number of ramps in the periodic potential
+h = J
+ϵ = 1e-7
 
 # calculate center of chain
 if L % 2 == 0:
@@ -142,9 +144,7 @@ def cooling_potential(j):
 
 
 ramp_width = int(L/(n_ramps ** 2))   # Give the length of the ramp potential in degrees
-assert n_ramps * ramp_width < L,\
-    (f"A system of grid size {L} cannot accommodate {n_ramps} barriers of width {ramp_width},\n"
-     f"as the total width of all barriers {n_ramps * ramp_width}!")
+
 ramp_spacing = int(L / n_ramps)  # Give the spacing between centers of ramps
 # Set the initial ramp center, and also grab the ends. The center is necessary for even grid sizes
 ramp_center = [sites[int(0.5 * ramp_spacing)] + (1 - ramp_width % 2) / 2]
@@ -169,13 +169,19 @@ def ring_with_ramp(j):
     for _ in range(n_ramps):
         ramp = np.where((j >= ramp_start[_]) & (j <= ramp_end[_]))[0]
         for i in ramp:
-            ring[i] = ramp_height * ((j[i] - ramp_end[_]) / (ramp_start[_] - ramp_end[_]))
+            ring[i] = h * ((j[i] - ramp_end[_]) / (ramp_start[_] - ramp_end[_]))
     return ring
 
 
+
 V_trapping = cooling_potential(sites)   # 5 * (np.arange(L) - j0) ** 2
-V_propagation = np.array([0, 0, 1, .8, .6, .4, 0.2, 0, 0, 0, 0, 0, 1, .8, .6, .4, .2, 0, 0, 0])  # ring_with_ramp(sites)
-r_width = 5
+w = 6
+V_propagation = np.array([3*h/w,  2*h/w,  1*h/w, 0, 0, 0, 0, h, 5*h/w, 4*h/w])  # ring_with_ramp(sites)
+
+
+assert n_ramps * w < L,\
+    (f"A system of grid size {L} cannot accommodate {n_ramps} barriers of width {w},\n"
+     f"as the total width of all barriers {n_ramps * w}!")
 ########################################################################################################################
 # Set the initial plotting parameters and the saving architecture
 ########################################################################################################################
@@ -211,7 +217,7 @@ extent = [degrees[0], degrees[-1], times[0], times[-1]]
 aspect = (degrees[-1] - degrees[0]) / (times[-1] - times[0])
 
 # Save file architecture
-tag = f'Ring_L{L}-T{t_prop}-J{J}-g{g:.2f}-ramp_width{r_width}'.replace('.', ',')
+tag = f'Ring_L{L}-T{t_prop}-J{J}-g{g:.2f}-ramp_width{w}-ramp_height{h}'.replace('.', ',')
 savesfolder = tag
 parent_dir = "./Archive_Data/ODE_Solver"
 try:
@@ -240,7 +246,7 @@ params = {
     'cooling_potential_width': cooling_potential_width,
     'cooling_potential_offset': cooling_potential_offset,
     'n_ramps': n_ramps,
-    'ramp_height': ramp_height,
+    'ramp_height': h,
     'init_potential': V_trapping,
     'potential': V_propagation
 }
@@ -255,10 +261,10 @@ with h5py.File(savespath+tag+'_data.hdf5', "w") as file:
 ########################################################################################################################
 
 plt.figure(fnum)
-fnum+=1
+fnum += 1
 #plt.title('Potentials after Propagation')
 plt.plot(degrees, V_propagation, '*-', label='Ring Potential')
-plt.plot(degrees, V_trapping, '*-', label='Cooling Potential')
+plt.plot(degrees, V_trapping, '-.', label='Cooling Potential')
 plt.xlim(degrees[0], degrees[-1])
 plt.ylim(-0.01, 1.2*V_propagation.max())
 plt.legend()
@@ -269,9 +275,12 @@ plt.savefig(savespath+tag+'_Potentials.png')
 # Define the quantum systems for the Schrödinger Gross-Pitaevskii equations
 init_qsys_gpe = quantum_system(J=J, g=g, V=deepcopy(V_trapping), ψ=np.ones(L, complex), is_open_boundary=False)
 init_qsys_se = quantum_system(J=J, g=0, V=deepcopy(V_trapping), ψ=np.ones(L, complex), is_open_boundary=False)
+print('Beginning Imaginary time propagation for')
+print('\nGPE:')
 img_propagator(τ_imag, ni_steps, init_qsys_gpe)
+print('\nSE:')
 img_propagator(τ_imag, ni_steps, init_qsys_se)
-
+print('\nGround States obtained for Schrodinger and GPE!\n')
 
 """plt.figure(fnum)
 fnum+=1
@@ -287,17 +296,30 @@ plt.tight_layout()"""
 # Set the propagation potential
 qsys_gpe = quantum_system(J=J, g=g, V=V_propagation, ψ=deepcopy(init_qsys_gpe.ψ), is_open_boundary=False)
 qsys_se = quantum_system(J=J, g=0, V=V_propagation, ψ=deepcopy(init_qsys_se.ψ), is_open_boundary=False)
+print('\nBeginning real-time propagation for')
+print('\nGPE:')
 gpe_wavefunction = propagator(times, qsys_gpe)
+print('\nSE:')
 se_wavefunction = propagator(times, qsys_se)
-
+print(f'Propagation finished for GPE and SE!\n'
+      '\nBeginning Calculations for energy, current, and cumulative current average')
 gpe_current = get_current(gpe_wavefunction, qsys_gpe)
-gpe_vel = get_moving_avg(gpe_current)
-gpe_en = [get_energy(0, ψ, qsys_gpe) for ψ in gpe_wavefunction]
+gpe_vel = get_cumulative_avg(gpe_current)
+gpe_en = np.array([get_energy(0, ψ, qsys_gpe) for ψ in gpe_wavefunction])
 se_current = get_current(se_wavefunction, qsys_se)
-se_vel = get_moving_avg(se_current)
-se_en = [get_energy(0, ψ, qsys_se) for ψ in se_wavefunction]
+se_vel = get_cumulative_avg(se_current)
+se_en = np.array([get_energy(0, ψ, qsys_se) for ψ in se_wavefunction])
 
-print(f'Average current over propagation for \n Gpe: {gpe_current.mean()} \n Schrodinger: {se_current.mean()}')
+print(f'Calculations have finished!\n' 
+      f'Average current over propagation for \n' 
+      f'Gpe: {np.real(gpe_current).mean():.5e} \nSchrodinger: {np.real(se_current).mean():.5e}')
+
+err = np.abs(np.real(gpe_en).max() - np.real(gpe_en).min())
+if err > ϵ:
+    print(f'WARNING! The error for this run was {err:.3e}, which is greater than your declared tolerance {ϵ:.1e}')
+else:
+    print(f'Error for this run was {err:.5e}, which is within tolerance!')
+
 
 with h5py.File(savespath+tag+'_data.hdf5', "a") as file:
     gpe_save = file.create_group('GPE')
@@ -306,10 +328,12 @@ with h5py.File(savespath+tag+'_data.hdf5', "a") as file:
     gpe_save.create_dataset('wavefunction', data=gpe_wavefunction)
     gpe_save.create_dataset('current', data=gpe_current)
     gpe_save.create_dataset('current_avgs', data=gpe_vel)
+    gpe_save.create_dataset('energy', data=gpe_en)
     se_save.create_dataset('ground_state', data=init_qsys_se.ψ)
     se_save.create_dataset('wavefunction', data=se_wavefunction)
     se_save.create_dataset('current', data=se_current)
     se_save.create_dataset('current_avgs', data=se_vel)
+    se_save.create_dataset('energy', data=se_en)
 ########################################################################################################################
 # Plot the results
 ########################################################################################################################
@@ -328,7 +352,7 @@ plt.figure(fnum, figsize=(6, 3))
 fnum += 1
 plt.title('Energy')
 plt.plot(times,
-    [get_energy(0, ψ, qsys_gpe) for ψ in gpe_wavefunction],
+    np.real(gpe_en),
     label=r"$g=%0.2f$" % g
 )
 plt.tight_layout()
@@ -367,8 +391,8 @@ plt.savefig(savespath+tag+'_Density.png')
 
 plt.figure(fnum)
 fnum += 1
-plt.plot(times, gpe_current, label=r'$g=%0.2f$'%g)
-plt.plot(times, se_current, '--', label=r'$g=0$')
+plt.plot(times, np.real(gpe_current), label=r'$g=%0.2f$'%g)
+plt.plot(times, np.real(se_current), '--', label=r'$g=0$')
 plt.xlabel('Time')
 plt.ylabel('Current')
 plt.legend()
@@ -378,8 +402,8 @@ plt.savefig(savespath+tag+'_Current.png')
 
 plt.figure(fnum)
 fnum+=1
-plt.plot(times, gpe_vel, label=r'$g={}$'.format(g))
-plt.plot(times, se_vel, '--', label=r'$g={}$'.format(0))
+plt.plot(times, np.real(gpe_vel), label=r'$g={}$'.format(g))
+plt.plot(times, np.real(se_vel), '--', label=r'$g={}$'.format(0))
 plt.xlabel('Time')
 plt.ylabel('Cumulative Time Average')
 plt.legend()

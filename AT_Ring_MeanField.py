@@ -114,8 +114,8 @@ def get_cumulative_avg(x):
 ########################################################################################################################
 # Physical System Parameters
 L = 10              # Number of sites
-J = 1.0            # hopping strength
-g = 0.00 * J        # Bose-Hubbard interaction strength
+J = -1.0            # hopping strength
+g = 1.00 * J        # Bose-Hubbard interaction strength
 τ_imag = 25        # Imaginary time propagation
 ni_steps = τ_imag * L ** 2        # Number of steps for imaginary time propagation
 t_prop = 300       # Time of propagation

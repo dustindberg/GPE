@@ -6,6 +6,7 @@ from numba import jit, njit
 from tqdm import tqdm
 from copy import deepcopy
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize, SymLogNorm
 import h5py
 import os
 
@@ -113,16 +114,16 @@ def get_cumulative_avg(x):
 # i d/dt ψ_j(t) = -J[ψ_{j-1}(t) + ψ_{j+1}(t)] + V(x) ψ_j(t) + g|ψ_j(t)|² ψ_j(t)
 ########################################################################################################################
 # Physical System Parameters
-L = 10              # Number of sites
-J = -1.0            # hopping strength
+L = 20              # Number of sites
+J = 1.0             # hopping strength
 g = 1.00 * J        # Bose-Hubbard interaction strength
-τ_imag = 25        # Imaginary time propagation
+τ_imag = 25         # Imaginary time propagation
 ni_steps = τ_imag * L ** 2        # Number of steps for imaginary time propagation
-t_prop = 300       # Time of propagation
+t_prop = 5       # Time of propagation
 n_steps = t_prop * L ** 2    # Number of steps for real-time propagation
 times = np.linspace(0, t_prop, n_steps)
 # Set params for the potential
-cooling_potential_width = 0.5
+cooling_potential_width = 0.05
 cooling_potential_offset = 0
 # Set params for
 n_ramps = 1                 # Define the number of ramps in the periodic potential
@@ -175,8 +176,9 @@ def ring_with_ramp(j):
 
 
 V_trapping = cooling_potential(sites)   # 5 * (np.arange(L) - j0) ** 2
-w = 6
-V_propagation = np.array([3*h/w,  2*h/w,  1*h/w, 0, 0, 0, 0, h, 5*h/w, 4*h/w])  # ring_with_ramp(sites)
+w = L-1
+V_propagation = np.linspace(w, 0, L) * (h / w)  # ring_with_ramp(sites)
+
 
 
 assert n_ramps * w < L,\
@@ -367,8 +369,9 @@ plt.imshow(
     np.abs(gpe_wavefunction) ** 2,
     extent=extent,
     aspect=aspect,
-    interpolation='nearest',
-    origin='lower'
+    interpolation='none', #'nearest',
+    origin='lower',
+    #norm=SymLogNorm(vmin=1e-9, vmax=1., linthresh=1e-9)
 )
 plt.xticks(np.arange(degrees[0], degrees[-1], step=60))
 plt.ylabel("time")
@@ -380,8 +383,9 @@ plt.imshow(
     np.abs(se_wavefunction) ** 2,
     extent=extent,
     aspect=aspect,
-    interpolation='nearest',
-    origin='lower'
+    interpolation='none', #'nearest','nearest',
+    origin='lower',
+    #norm=SymLogNorm(vmin=1e-9, vmax=1., linthresh=1e-9)
 )
 plt.xticks(np.arange(degrees[0], degrees[-1], step=60))
 plt.ylabel("time")

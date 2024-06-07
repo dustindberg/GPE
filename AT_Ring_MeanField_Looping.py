@@ -2,6 +2,7 @@ from collections import namedtuple
 import numpy as np
 import scipy.ndimage
 from scipy.integrate import ode
+from scipy.signal.windows import blackman
 from numba import jit, njit
 from tqdm import tqdm
 from copy import deepcopy
@@ -113,21 +114,21 @@ def get_cumulative_avg(x):
 # i d/dt ψ_j(t) = -J[ψ_{j-1}(t) + ψ_{j+1}(t)] + V(x) ψ_j(t) + g|ψ_j(t)|² ψ_j(t)
 ########################################################################################################################
 # Physical System Parameters
-L = 10              # Number of sites
-J = 1.0            # hopping strength
-#g = 0.00 * J        # Bose-Hubbard interaction strength
-g_list = np.linspace(0, 10, 101) * J
-τ_imag = 25        # Imaginary time propagation
+L = 30              # Number of sites
+J = 1            # hopping strength
+# g = 0.00 * J        # Bose-Hubbard interaction strength
+g_list = np.linspace(0, 20, 201)
+τ_imag = 20        # Imaginary time propagation
 ni_steps = τ_imag * L ** 2        # Number of steps for imaginary time propagation
-t_prop = 300       # Time of propagation
+t_prop = 5       # Time of propagation
 n_steps = t_prop * L ** 2    # Number of steps for real-time propagation
 times = np.linspace(0, t_prop, n_steps)
 # Set params for the potential
 cooling_potential_width = 0.5
-cooling_potential_offset = 0
+cooling_potential_offset = -int(L/2 - 7)
 # Set params for
 n_ramps = 1                 # Define the number of ramps in the periodic potential
-h = J
+h = 0.5 * J
 ϵ = 1e-7
 
 # calculate center of chain
@@ -176,9 +177,22 @@ def ring_with_ramp(j):
 
 
 V_trapping = cooling_potential(sites)   # 5 * (np.arange(L) - j0) ** 2
-w = 8
-V_propagation = np.array([4*h/w, 3*h/w,  2*h/w,  1*h/w, 0, 0, h, 7*h/w, 6*h/w, 5*h/w])  # ring_with_ramp(sites)
+w = int(L/3)
+left_edge = 0
+right_edge = int(L/(n_ramps * 2)) - left_edge
+shift = 0
+V_propagation = np.hstack((np.zeros(int(L/3)), np.linspace(h, 0, int(L/6)), np.array(0),
+                           np.linspace(h, (h / int(L/6 - 1)), int(L/6)-1), np.zeros(int(L/3))))
 
+"""np.roll(np.hstack((np.zeros(w),
+                                   np.linspace(h/(left_edge+1), (left_edge*h)/(left_edge+1), left_edge),
+                                   np.linspace(h, (h/right_edge), right_edge), np.zeros(w),
+                                   np.linspace(h/(left_edge+1), (left_edge*h)/(left_edge+1), left_edge),
+                                   np.linspace(h, (h/right_edge), right_edge))), -(int(w/2) + shift))"""
+
+# np.array([0, 0, h/3, 2*h/3])
+# np.zeros(w), np.linspace(h, (h/(w+1)), w), np.zeros(w), np.linspace(h, (h/(w+1)), w)
+# V_propagation = np.roll(np.linspace(w, 0, L), shift) * (h / w)  # ring_with_ramp(sites)
 
 assert n_ramps * w <= L,\
     (f"A system of grid size {L} cannot accommodate {n_ramps} barriers of width {w},\n"
@@ -202,7 +216,7 @@ ok = {
 
 plt_params = {
     'figure.figsize': (4, 3),
-    'figure.dpi': 300,
+    'figure.dpi': 150,
     'legend.fontsize': 8,
     'axes.labelsize': 10,
     'axes.titlesize': 10,
@@ -218,14 +232,22 @@ extent = [degrees[0], degrees[-1], times[0], times[-1]]
 aspect = (degrees[-1] - degrees[0]) / (times[-1] - times[0])
 
 parent_dir = "./Archive_Data/ODE_Solver/Looped_Ring_"
-parent_dir += f'L{L}-J{J:.1f}-g_range{g_list[0]:.2f}to{g_list[-1]:.2f}-{n_ramps}Ramp-W{w}-H{h}'.replace(
+parent_dir += f'L{L}-J{J:.1f}-t{t_prop}-g_range{g_list[1]:.2f}to{g_list[-1]:.2f}'.replace(
     '.', ',')
+parent_dir += f'-{n_ramps}Ramp-W{w}-REdge{right_edge}-H{h}'.replace('.', ',')
+parent_dir += f'-V0{cooling_potential_width}at{cooling_potential_offset}'.replace('.', ',')
+#parent_dir +='-SYMMETRIC'
+
+if shift != 0:
+    parent_dir += f'-ShiftedBy{shift}'
 try:
     os.mkdir(parent_dir)
     print(f'Parent Directory created, saving to: {parent_dir}')
 except:
     FileExistsError
     print(f'CAREFUL! The parent directory exists. \nResults will overwrite everything in {parent_dir}\n')
+
+
 fnum = 0
 plt.figure(fnum)
 fnum += 1
@@ -234,10 +256,12 @@ plt.plot(degrees, V_propagation, '*-', label='Ring Potential')
 plt.plot(degrees, V_trapping, '-.', label='Cooling Potential')
 plt.xlim(degrees[0], degrees[-1])
 plt.ylim(-0.01, 1.2*V_propagation.max())
-plt.legend()
+plt.legend(loc='lower left')
 plt.tight_layout()
 plt.savefig(parent_dir + '/Potentials.pdf')
-plt.savefig(parent_dir+'/Potentials.png')
+#plt.savefig(parent_dir+'/Potentials.png')
+plt.show()
+
 
 results_dict = dict()
 print('Beginning simulations. Progress is tracked with TQDM')
@@ -283,8 +307,8 @@ for g in tqdm(g_list):
 
 
     # Define the quantum systems for the Schrödinger Gross-Pitaevskii equations
-    init_qsys_gpe = quantum_system(J=J, g=g, V=deepcopy(V_trapping), ψ=np.ones(L, complex), is_open_boundary=False)
-    init_qsys_se = quantum_system(J=J, g=0, V=deepcopy(V_trapping), ψ=np.ones(L, complex), is_open_boundary=False)
+    init_qsys_gpe = quantum_system(J=J, g=g, V=deepcopy(V_trapping), ψ=np.ones(L, complex), is_open_boundary=True)
+    init_qsys_se = quantum_system(J=J, g=0, V=deepcopy(V_trapping), ψ=np.ones(L, complex), is_open_boundary=True)
     img_propagator(τ_imag, ni_steps, init_qsys_gpe)
     img_propagator(τ_imag, ni_steps, init_qsys_se)
 
@@ -300,8 +324,8 @@ for g in tqdm(g_list):
 
 
     # Set the propagation potential
-    qsys_gpe = quantum_system(J=J, g=g, V=V_propagation, ψ=deepcopy(init_qsys_gpe.ψ), is_open_boundary=False)
-    qsys_se = quantum_system(J=J, g=0, V=V_propagation, ψ=deepcopy(init_qsys_se.ψ), is_open_boundary=False)
+    qsys_gpe = quantum_system(J=J, g=g, V=V_propagation, ψ=deepcopy(init_qsys_gpe.ψ), is_open_boundary=True)
+    qsys_se = quantum_system(J=J, g=0, V=V_propagation, ψ=deepcopy(init_qsys_se.ψ), is_open_boundary=True)
     gpe_wavefunction = propagator(times, qsys_gpe)
     se_wavefunction = propagator(times, qsys_se)
     gpe_current = get_current(gpe_wavefunction, qsys_gpe)
@@ -311,10 +335,12 @@ for g in tqdm(g_list):
     se_vel = get_cumulative_avg(se_current)
     se_en = np.array([get_energy(0, ψ, qsys_se) for ψ in se_wavefunction])
 
-
     err = np.abs(np.real(gpe_en).max() - np.real(gpe_en).min())
     if err > ϵ:
         print(f'\nWARNING! The error for run g={g:.2f} was {err:.3e}, which is greater than your declared tolerance {ϵ:.1e}')
+
+    if np.real(gpe_en).max() > h:
+        print(f'\nATTENTION! For g={g}, the BEC energy, E={np.real(gpe_en).max()}, is above the barrier height, {h}.')
 
     with h5py.File(savespath+tag+'_data.hdf5', "a") as file:
         gpe_save = file.create_group('GPE')
@@ -370,7 +396,7 @@ for g in tqdm(g_list):
     )
     plt.tight_layout()
     plt.savefig(savespath+tag+'_Energy.pdf')
-    plt.savefig(savespath+tag+'_Energy.png')
+    #plt.savefig(savespath+tag+'_Energy.png')
 
     plt.figure(fnum, figsize=(6, 3))
     fnum += 1
@@ -380,8 +406,8 @@ for g in tqdm(g_list):
         np.abs(gpe_wavefunction) ** 2,
         extent=extent,
         aspect=aspect,
-        interpolation='nearest',
-        origin='lower'
+        origin='lower',
+        interpolation='none',   # 'nearest',
     )
     plt.xticks(np.arange(degrees[0], degrees[-1], step=60))
     plt.ylabel("time")
@@ -393,13 +419,13 @@ for g in tqdm(g_list):
         np.abs(se_wavefunction) ** 2,
         extent=extent,
         aspect=aspect,
-        interpolation='nearest',
-        origin='lower'
+        origin='lower',
+        interpolation='none',   # 'nearest',
     )
     plt.xticks(np.arange(degrees[0], degrees[-1], step=60))
     plt.ylabel("time")
     plt.colorbar()
-    plt.savefig(savespath+tag+'_Density.pdf')
+    #plt.savefig(savespath+tag+'_Density.pdf')
     plt.savefig(savespath+tag+'_Density.png')
 
     plt.figure(fnum)
@@ -408,10 +434,10 @@ for g in tqdm(g_list):
     plt.plot(times, np.real(se_current), '--', label=r'$g=0$')
     plt.xlabel('Time')
     plt.ylabel('Current')
-    plt.legend()
+    plt.legend(loc='lower left')
     plt.tight_layout()
     plt.savefig(savespath+tag+'_Current.pdf')
-    plt.savefig(savespath+tag+'_Current.png')
+    #plt.savefig(savespath+tag+'_Current.png')
 
     plt.figure(fnum)
     fnum+=1
@@ -419,10 +445,10 @@ for g in tqdm(g_list):
     plt.plot(times, np.real(se_vel), '--', label=r'$g={}$'.format(0))
     plt.xlabel('Time')
     plt.ylabel('Cumulative Time Average')
-    plt.legend()
+    plt.legend(loc='lower left')
     plt.tight_layout()
     plt.savefig(savespath+tag+'_Current_Average.pdf')
-    plt.savefig(savespath+tag+'_Current_Average.png')
+    #plt.savefig(savespath+tag+'_Current_Average.png')
 
     """plt.figure(fnum)
     fnum+=1
@@ -438,34 +464,76 @@ for g in tqdm(g_list):
     plt.close('all')
     fnum = 1
 
-final_current_avgs = []
-avg_energy_tracker = []
-order_tracker = []
-for _ in results_dict:
-    final_current_avgs.append(results_dict[_]['GPE']['current_avgs'][-1])
-    avg_energy_tracker.append(np.array(results_dict[_]['GPE']['energy']).mean())
-    order_tracker.append(_)
 
-plt.figure(fnum)
+schro_current_avg = results_dict['0.00']['GPE']['current_avgs']
+half = int(0.5 * len(schro_current_avg))
+throw = [max(schro_current_avg[half:]), min(schro_current_avg[half:])]
+
+final_current_avgs = np.empty(len(results_dict))
+thrown_current_avgs = np.empty(len(results_dict))
+current_upper_bound = np.empty(len(results_dict))
+current_lower_bound = np.empty(len(results_dict))
+current_avgs_upper_thrown = np.empty(len(results_dict))
+current_avgs_lower_thrown = np.empty(len(results_dict))
+avg_energy_tracker = np.empty(len(results_dict))
+order_tracker = np.empty(len(results_dict))
+keys = list(results_dict.keys())
+for _ in range(len(results_dict)):
+    thrown_data = get_cumulative_avg(results_dict[keys[_]]['GPE']['current'][half:])
+    thrown_data *= blackman(len(thrown_data))
+    final_current_avgs[_] = results_dict[keys[_]]['GPE']['current_avgs'][-1]
+    thrown_current_avgs[_] = thrown_data[-1]
+    current_upper_bound[_] = max(results_dict[keys[_]]['GPE']['current_avgs'][half:])
+    current_lower_bound[_] = min(results_dict[keys[_]]['GPE']['current_avgs'][half:])
+    current_avgs_upper_thrown[_] = max(thrown_data)
+    current_avgs_upper_thrown[_] = min(thrown_data)
+    avg_energy_tracker[_] = np.array(results_dict[keys[_]]['GPE']['energy']).mean()
+    order_tracker[_] = keys[_]
+
+
+
+plt.figure(fnum, figsize=(16, 4))
 fnum += 1
-plt.plot(g_list, final_current_avgs)
-plt.xlim(g_list[0], g_list[-1])
+plt.fill_between(g_list, current_upper_bound, current_lower_bound, color=ok['blue'], alpha=0.7,
+                 label='Oscillation Range')
+plt.plot(g_list, final_current_avgs, color=ok['navy'], label='Final Current')
+plt.xlim(g_list[1], g_list[-1])
+plt.hlines(throw[0], g_list[0], g_list[-1], linestyles='--', color=ok['red'], label='Baseline Oscillations')
+plt.hlines(throw[-1], g_list[0], g_list[-1], linestyles='--', color=ok['red'])
+plt.hlines((throw[0] + throw[-1])/2, g_list[0], g_list[-1], linestyles='--', color=ok['orange'], label='"Zero" point')
 plt.xlabel('$g$')
 plt.ylabel('Average Current')
+plt.legend(loc='upper left')
 plt.tight_layout()
 
 plt.savefig(parent_dir+'/CurrentVSg.pdf')
-plt.savefig(parent_dir+'/CurrentVSg.png')
+#plt.savefig(parent_dir+'/CurrentVSg.png')
 
-plt.figure(fnum)
+plt.figure(fnum, figsize=(16, 4))
+fnum += 1
+plt.fill_between(g_list, current_avgs_upper_thrown, current_avgs_lower_thrown, color=ok['blue'], alpha=0.7,
+                 label='Current Avgs Oscillation Range after half time')
+plt.plot(g_list, thrown_current_avgs,
+         color=ok['navy'], label='Final Current Avg after half time')
+plt.xlim(g_list[1], g_list[-1])
+plt.hlines(throw[0], g_list[0], g_list[-1], linestyles='--', color=ok['red'], label='Baseline Oscillations')
+plt.hlines(throw[-1], g_list[0], g_list[-1], linestyles='--', color=ok['red'])
+plt.hlines((throw[0] + throw[-1])/2, g_list[0], g_list[-1], linestyles='--', color=ok['orange'], label='"Zero" point')
+plt.xlabel('$g$')
+plt.ylabel('Thrown Cumulative Average Current')
+plt.legend(loc='lower left')
+plt.tight_layout()
+plt.savefig(parent_dir+'/CurrentVSg_ThrownHalf.pdf')
+
+plt.figure(fnum, figsize=(16, 4))
 fnum += 1
 plt.plot(g_list, avg_energy_tracker)
-plt.xlim(g_list[0], g_list[-1])
+plt.xlim(g_list[1], g_list[-1])
 plt.xlabel('$g$')
 plt.ylabel('Average Energy')
 plt.tight_layout()
 
-plt.savefig(parent_dir+'/AvgEnergy.pdf')
+#plt.savefig(parent_dir+'/AvgEnergy.pdf')
 plt.savefig(parent_dir+'/AvgEnergy.png')
 
 plt.close('all')

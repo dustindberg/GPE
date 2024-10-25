@@ -14,6 +14,7 @@ import os
 
 scale = 0.01
 fignum = 1
+peak_offset=0
 for s in range(0, 1):
     Start_time = datetime.datetime.now(pytz.timezone('US/Central'))     # Start timing for optimizing runs
 

@@ -7,6 +7,7 @@ from numba import jit, njit
 from tqdm import tqdm
 from copy import deepcopy
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize, SymLogNorm
 import h5py
 import os
 
@@ -114,21 +115,23 @@ def get_cumulative_avg(x):
 # i d/dt ψ_j(t) = -J[ψ_{j-1}(t) + ψ_{j+1}(t)] + V(x) ψ_j(t) + g|ψ_j(t)|² ψ_j(t)
 ########################################################################################################################
 # Physical System Parameters
-L = 30              # Number of sites
+L = 36              # Number of sites
 J = 1            # hopping strength
+obc = True #False
 # g = 0.00 * J        # Bose-Hubbard interaction strength
 g_list = np.linspace(0, 20, 201)
-τ_imag = 20        # Imaginary time propagation
+τ_imag = 25        # Imaginary time propagation
 ni_steps = τ_imag * L ** 2        # Number of steps for imaginary time propagation
-t_prop = 5       # Time of propagation
+t_prop = 10       # Time of propagation
 n_steps = t_prop * L ** 2    # Number of steps for real-time propagation
 times = np.linspace(0, t_prop, n_steps)
 # Set params for the potential
 cooling_potential_width = 0.5
-cooling_potential_offset = -int(L/2 - 7)
+cooling_potential_offset = 0 # -int(L/2 - 7)
+
 # Set params for
 n_ramps = 1                 # Define the number of ramps in the periodic potential
-h = 0.5 * J
+h = 2.0 * J
 ϵ = 1e-7
 
 # calculate center of chain
@@ -137,7 +140,7 @@ if L % 2 == 0:
 else:
     j0 = L // 2               # center of chain
 sites = np.arange(L) - j0
-degrees = np.array(sites) * 180 / sites[-1]
+degrees = np.arange(L) #np.array(sites) * 180 / sites[-1]
 
 
 def cooling_potential(j):
@@ -176,13 +179,17 @@ def ring_with_ramp(j):
 
 
 
-V_trapping = cooling_potential(sites)   # 5 * (np.arange(L) - j0) ** 2
+V_trapping = np.hstack((np.zeros(12),2*h*np.ones(L-12))) #cooling_potential(np.arange(L))
+#np.hstack((h*np.ones(4), np.linspace(h, 0, 9), np.zeros(7), h * np.ones(12)))#
+#cooling_potential(sites)   # 5 * (np.arange(L) - j0) ** 2
 w = int(L/3)
 left_edge = 0
-right_edge = int(L/(n_ramps * 2)) - left_edge
+right_edge = 12 #int(L/(n_ramps * 2)) - left_edge
 shift = 0
-V_propagation = np.hstack((np.zeros(int(L/3)), np.linspace(h, 0, int(L/6)), np.array(0),
-                           np.linspace(h, (h / int(L/6 - 1)), int(L/6)-1), np.zeros(int(L/3))))
+V_propagation = np.flip(np.hstack((np.zeros(12), np.linspace(h, 0, 13), np.zeros(11))))
+#np.hstack((np.zeros(4), np.linspace(h, 0, 9), np.zeros(7), np.linspace(h, 0, 9), np.zeros(3))))
+# np.hstack((np.zeros(int(L/3)), np.linspace(h, 0, int(L/6)), np.array(0),
+                #           np.linspace(h, (h / int(L/6 - 1)), int(L/6)-1), np.zeros(int(L/3))))
 
 """np.roll(np.hstack((np.zeros(w),
                                    np.linspace(h/(left_edge+1), (left_edge*h)/(left_edge+1), left_edge),
@@ -231,12 +238,17 @@ plt.rcParams.update(plt_params)
 extent = [degrees[0], degrees[-1], times[0], times[-1]]
 aspect = (degrees[-1] - degrees[0]) / (times[-1] - times[0])
 
-parent_dir = "./Archive_Data/ODE_Solver/Looped_Ring_"
-parent_dir += f'L{L}-J{J:.1f}-t{t_prop}-g_range{g_list[1]:.2f}to{g_list[-1]:.2f}'.replace(
+#chosen_gs_index = 100
+#g_save = str(g_list[chosen_gs_index])
+parent_dir = "./Archive_Data/ODE_Solver/"
+#parent_dir += f'SameGS-g={g_list[chosen_gs_index]}_'.replace('.', ',')
+parent_dir += f'Looped_SingleBarrier_'
+parent_dir += f'L{L}-J{J:.1f}-t{t_prop}-g_range{g_list[1]:.2f}to{g_list[-1]:.2f}-obc{obc}'.replace(
     '.', ',')
 parent_dir += f'-{n_ramps}Ramp-W{w}-REdge{right_edge}-H{h}'.replace('.', ',')
-parent_dir += f'-V0{cooling_potential_width}at{cooling_potential_offset}'.replace('.', ',')
+#parent_dir += f'-V0{cooling_potential_width}at{cooling_potential_offset}'.replace('.', ',')
 #parent_dir +='-SYMMETRIC'
+parent_dir += '-FLIPPED'
 
 if shift != 0:
     parent_dir += f'-ShiftedBy{shift}'
@@ -252,7 +264,7 @@ fnum = 0
 plt.figure(fnum)
 fnum += 1
 #plt.title('Potentials after Propagation')
-plt.plot(degrees, V_propagation, '*-', label='Ring Potential')
+plt.plot(degrees, V_propagation, '*-', label='Prop Potential')
 plt.plot(degrees, V_trapping, '-.', label='Cooling Potential')
 plt.xlim(degrees[0], degrees[-1])
 plt.ylim(-0.01, 1.2*V_propagation.max())
@@ -262,6 +274,13 @@ plt.savefig(parent_dir + '/Potentials.pdf')
 #plt.savefig(parent_dir+'/Potentials.png')
 plt.show()
 
+# Quickly get the Schrodinger ground state so that it only has to be run once
+init_qsys_se = quantum_system(J=J, g=0, V=deepcopy(V_trapping), ψ=np.ones(L, complex), is_open_boundary=obc)
+img_propagator(τ_imag, ni_steps, init_qsys_se)
+
+# If running with single ground state, uncomment this.
+#init_qsys_gpe = quantum_system(J=J, g=chosen_gs_index, V=deepcopy(V_trapping), ψ=np.ones(L, complex), is_open_boundary=obc)
+#img_propagator(τ_imag, ni_steps, init_qsys_gpe)
 
 results_dict = dict()
 print('Beginning simulations. Progress is tracked with TQDM')
@@ -307,10 +326,9 @@ for g in tqdm(g_list):
 
 
     # Define the quantum systems for the Schrödinger Gross-Pitaevskii equations
-    init_qsys_gpe = quantum_system(J=J, g=g, V=deepcopy(V_trapping), ψ=np.ones(L, complex), is_open_boundary=True)
-    init_qsys_se = quantum_system(J=J, g=0, V=deepcopy(V_trapping), ψ=np.ones(L, complex), is_open_boundary=True)
+    init_qsys_gpe = quantum_system(J=J, g=g, V=deepcopy(V_trapping), ψ=np.ones(L, complex), is_open_boundary=obc)
     img_propagator(τ_imag, ni_steps, init_qsys_gpe)
-    img_propagator(τ_imag, ni_steps, init_qsys_se)
+
 
     """plt.figure(fnum)
     fnum+=1
@@ -324,8 +342,8 @@ for g in tqdm(g_list):
 
 
     # Set the propagation potential
-    qsys_gpe = quantum_system(J=J, g=g, V=V_propagation, ψ=deepcopy(init_qsys_gpe.ψ), is_open_boundary=True)
-    qsys_se = quantum_system(J=J, g=0, V=V_propagation, ψ=deepcopy(init_qsys_se.ψ), is_open_boundary=True)
+    qsys_gpe = quantum_system(J=J, g=g, V=V_propagation, ψ=deepcopy(init_qsys_se.ψ), is_open_boundary=obc)
+    qsys_se = quantum_system(J=J, g=0, V=V_propagation, ψ=deepcopy(init_qsys_gpe.ψ), is_open_boundary=obc)
     gpe_wavefunction = propagator(times, qsys_gpe)
     se_wavefunction = propagator(times, qsys_se)
     gpe_current = get_current(gpe_wavefunction, qsys_gpe)
@@ -408,10 +426,10 @@ for g in tqdm(g_list):
         aspect=aspect,
         origin='lower',
         interpolation='none',   # 'nearest',
+        norm=SymLogNorm(vmin=1e-7, vmax=1., linthresh=1e-9),
     )
     plt.xticks(np.arange(degrees[0], degrees[-1], step=60))
     plt.ylabel("time")
-    plt.colorbar()
 
     plt.subplot(122)
     plt.title(r"$g = 0$")
@@ -421,6 +439,7 @@ for g in tqdm(g_list):
         aspect=aspect,
         origin='lower',
         interpolation='none',   # 'nearest',
+        norm=SymLogNorm(vmin=1e-7, vmax=1., linthresh=1e-9),
     )
     plt.xticks(np.arange(degrees[0], degrees[-1], step=60))
     plt.ylabel("time")
@@ -480,16 +499,15 @@ order_tracker = np.empty(len(results_dict))
 keys = list(results_dict.keys())
 for _ in range(len(results_dict)):
     thrown_data = get_cumulative_avg(results_dict[keys[_]]['GPE']['current'][half:])
-    thrown_data *= blackman(len(thrown_data))
+    # thrown_data *= blackman(len(thrown_data))
     final_current_avgs[_] = results_dict[keys[_]]['GPE']['current_avgs'][-1]
     thrown_current_avgs[_] = thrown_data[-1]
     current_upper_bound[_] = max(results_dict[keys[_]]['GPE']['current_avgs'][half:])
     current_lower_bound[_] = min(results_dict[keys[_]]['GPE']['current_avgs'][half:])
     current_avgs_upper_thrown[_] = max(thrown_data)
-    current_avgs_upper_thrown[_] = min(thrown_data)
+    current_avgs_lower_thrown[_] = min(thrown_data)
     avg_energy_tracker[_] = np.array(results_dict[keys[_]]['GPE']['energy']).mean()
     order_tracker[_] = keys[_]
-
 
 
 plt.figure(fnum, figsize=(16, 4))
@@ -532,8 +550,24 @@ plt.xlim(g_list[1], g_list[-1])
 plt.xlabel('$g$')
 plt.ylabel('Average Energy')
 plt.tight_layout()
-
 #plt.savefig(parent_dir+'/AvgEnergy.pdf')
 plt.savefig(parent_dir+'/AvgEnergy.png')
+
+osc_avg = (current_upper_bound + current_lower_bound) * 0.5
+plt.figure(fnum, figsize=(16, 4))
+fnum += 1
+plt.fill_between(g_list, current_upper_bound, current_lower_bound, color=ok['blue'], alpha=0.7,
+                 label='Oscillation Range')
+plt.plot(g_list, osc_avg, color=ok['navy'], label='Average Current Oscillations')
+plt.xlim(g_list[1], g_list[-1])
+plt.hlines(throw[0], g_list[0], g_list[-1], linestyles='--', color=ok['red'], label='Baseline Oscillations')
+plt.hlines(throw[-1], g_list[0], g_list[-1], linestyles='--', color=ok['red'])
+plt.hlines((throw[0] + throw[-1])/2, g_list[0], g_list[-1], linestyles='--', color=ok['orange'], label='"Zero" point')
+plt.xlabel('$g$')
+plt.ylabel('Average Current')
+plt.legend(loc='upper left')
+plt.tight_layout()
+plt.savefig(parent_dir+'/CurrentOscillationsVSg.pdf')
+
 
 plt.close('all')

@@ -489,7 +489,7 @@ class SplitOpGPE1D(object):
             e_n = relative_diff(self.wavefunction_next, self.wavefunction)
 
             while e_n > self.epsilon:
-                # the error is to high, decrease the time step and propagate with the new time step
+                # the error is too high, decrease the time step and propagate with the new time step
 
                 self.dt *= self.epsilon / e_n
 

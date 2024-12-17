@@ -2,12 +2,30 @@ from numba import njit
 import matplotlib.pyplot as plt
 from matplotlib.colors import SymLogNorm
 import numpy as np
+from numpy import linalg
 from scipy.constants import hbar, Boltzmann
 from scipy.interpolate import UnivariateSpline
 from split_op_gpe1D import SplitOpGPE1D, imag_time_gpe1D  # class for the split operator propagation
 from tqdm import tqdm
 import sys
+import pyfftw
+import pickle as pickle
+import h5py
 import os
+from collections import namedtuple
+
+
+threads = 4
+
+
+def relative_diff(psi_next, psi):
+    """
+    Efficiently calculate the relative difference of two wavefunctions. (Used in thea adaptive scheme)
+    :param psi_next: numpy.array
+    :param psi: numpy.array
+    :return: float
+    """
+    return linalg.norm(psi_next - psi) / linalg.norm(psi_next)
 
 
 class BEC:
@@ -683,7 +701,7 @@ class SplitOpTrackingControl(object):
 
         # normalize
         # this line is equivalent to
-        # self.wavefunction /= np.sqrt(np.sum(np.abs(self.wavefunction) ** 2 ) * self.dx)
+        self.wavefunction /= np.sqrt(np.sum(np.abs(self.wavefunction) ** 2) * self.dx)
         # wavefunction /= linalg.norm(wavefunction) * np.sqrt(self.dx)
 
     def get_ehrenfest(self):
@@ -761,3 +779,81 @@ class SplitOpTrackingControl(object):
         self.wavefunction /= linalg.norm(self.wavefunction) * np.sqrt(self.dx)
 
         return self
+
+quantum_system = namedtuple('quantum_system', ['J', 'g', 'V', 'ψ', 'open_bounds'])
+
+
+def standardize_plots(params=plt.rcParams):
+    """
+    Updates plot sizes and relevant params so that plots stay consistent
+    :param params: rcParams or any other updatable plotting params set
+    :return: The Okabe-Ito color scheme with modified Amber for better readability on white backgrounds
+    """
+    ok = {
+        'blue': "#56B4E9",
+        'orange': "#E69F00",
+        'green': "#009E73",
+        'amber': "#F5C710",
+        'purple': "#CC79A7",
+        'navy': "#0072B2",
+        'red': "#D55E00",
+        'black': "#000000",
+        'grey': "#999999",
+        'yellow': "#F0E442",
+    }
+
+    plt_params = {
+        'figure.figsize': (4, 3),
+        'figure.dpi': 300,
+        'legend.fontsize': 8,
+        'axes.labelsize': 10,
+        'axes.titlesize': 10,
+        'axes.prop_cycle': plt.cycler('color', (ok[_] for _ in ok)),
+        'xtick.labelsize': 8,
+        'ytick.labelsize': 8,
+        'lines.linewidth': 2,
+    }
+    params.update(plt_params)
+    return ok
+
+
+def build_saves_tag(params_list, unique_identifier='GPE', parent_directory='./Archived_Data/GPE'):
+    save_tag = unique_identifier
+    try:
+        os.mkdir(parent_directory)
+        print(f'Parent Directory created, saved to: {parent_directory}')
+    except:
+        FileExistsError
+        print(f'Parent directory check passed! \nResults will be available in {parent_directory}\n')
+    for _ in params_list:
+        save_tag += f'-{_}{params_list[_]}'.replace('.', ',')
+    unique_path = os.path.join(parent_directory, save_tag)
+    try:
+        os.mkdir(unique_path)
+        print(f'Simulation Directory "{save_tag}" created')
+    except:
+        FileExistsError
+        print(
+            f'WARNING: The directory "{save_tag}" exists! \nYou may be overwriting previous data (; n;)\n')
+    path_to_saves = unique_path + '/'
+    return path_to_saves, save_tag
+
+def save_hdf5(file_name, path, to_be_saved, save_method='w', group_name=None):
+    with h5py.File(path + file_name + '_data.hdf5', mode=save_method) as file:
+        if group_name:
+            my_group = file.create_group(group_name)
+            for _, __ in to_be_saved.items():
+                my_group.create_dataset(_, data=__)
+        else:
+            for _, __ in to_be_saved.items():
+                file.create_dataset(_, data=__)
+
+def load_hdf5(file_name, file_path, things_to_grab, group_name=None):
+    with h5py.File(file_path + file_name + '_data.hdf5', mode='r') as file:
+        retrieval_path = str()
+        if group_name:
+            retrieval_path += f'{group_name}/'
+        unpacked_results = dict()
+        for _ in things_to_grab:
+            unpacked_results[_] = file[retrieval_path+_][()]
+        return unpacked_results

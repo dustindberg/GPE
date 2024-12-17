@@ -119,10 +119,10 @@ L = 36              # Number of sites
 J = 1            # hopping strength
 obc = True #False
 # g = 0.00 * J        # Bose-Hubbard interaction strength
-g_list = np.linspace(0, 20, 201)
+g_list = np.linspace(0, 5, 6)
 τ_imag = 25        # Imaginary time propagation
 ni_steps = τ_imag * L ** 2        # Number of steps for imaginary time propagation
-t_prop = 10       # Time of propagation
+t_prop = 5       # Time of propagation
 n_steps = t_prop * L ** 2    # Number of steps for real-time propagation
 times = np.linspace(0, t_prop, n_steps)
 # Set params for the potential
@@ -179,7 +179,7 @@ def ring_with_ramp(j):
 
 
 
-V_trapping = np.hstack((np.zeros(12),2*h*np.ones(L-12))) #cooling_potential(np.arange(L))
+V_trapping = np.hstack((np.zeros(12),10*h*np.ones(L-12))) #cooling_potential(np.arange(L))
 #np.hstack((h*np.ones(4), np.linspace(h, 0, 9), np.zeros(7), h * np.ones(12)))#
 #cooling_potential(sites)   # 5 * (np.arange(L) - j0) ** 2
 w = int(L/3)
@@ -571,3 +571,4 @@ plt.savefig(parent_dir+'/CurrentOscillationsVSg.pdf')
 
 
 plt.close('all')
+

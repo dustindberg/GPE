@@ -146,7 +146,7 @@ class BEC:
     def dimless_energy(self, energy, order, units='K'):
         """
         Converts energy in units of some order of either Joules or Kelvin and converts it to dimensionless units
-        :param int|float|np.ndarray energy: dimensionless energy
+        :param int|float|np.ndarray energy: energy with units specified by params: order and units.
         :param int|float order: Specify the order, X, with respect to Joules or Kelvin. Eg, for microKelvin, X=-6
         :param str units:
         :return:

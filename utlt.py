@@ -103,14 +103,14 @@ class BEC:
         """
         return self.qatc(position) * self.L_x * 10 ** (-order)
 
-    def dimless_x(self, position, order):
+    def dimless_x(self, position):
         """
         Takes a physical quantity of some order of meters and converts them to dimensionless units
         :param int|float|np.ndarray position: Pass a point or np.array to be converted
         :param int|float order: Specify the order, X, for 1eX meters. For example, to convert to micrometers, X=-6
         :return: Position grid in Xm, where X is the order of the units you desire. Eg. nanometers = 1e-9 meters
         """
-        return self.qatc(position) / (self.L_x * (10 ** -order))
+        return self.qatc(position) / self.L_x
 
     def convert_time(self, time, order):
         """

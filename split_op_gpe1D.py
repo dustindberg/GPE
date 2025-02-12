@@ -16,7 +16,7 @@ os.environ['MKL_NUM_THREADS'] = '{}'.format(threads)
 
 
 def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=None, epsilon=1e-7,
-                    abs_boundary=1., fftw_wisdom_fname='fftw.wisdom', **kwargs):
+                    abs_boundary=1., fftw_wisdom_fname='fftw.wisdom', get_mu=False, **kwargs):
     """
     Imaginary time propagator to get the ground state and chemical potential
 
@@ -151,6 +151,25 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
 
         return energy + v_min
 
+    @njit
+    def get_chempot(psi, pis_p):
+        """
+        Calculate the expectation value of the hamiltonian, which is chemical potential
+        :return: float
+        """
+        density = np.abs(psi) ** 2
+        density /= density.sum() * dx
+
+        energy = np.sum((v + g * density) * density) * dx
+
+        # get momentum density
+        density = np.abs(pis_p) ** 2
+        density /= density.sum()
+
+        energy += np.sum(k * density)
+
+        return energy + v_min
+
     counter = 0
     energy = 0.
     energy_previous = np.infty
@@ -192,7 +211,10 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
         counter += 1
 
     print("\n\nFinal current ground state energy = {:.4e}".format(energy))
-
+    if get_mu:
+        mu = get_chempot(wavefunction, wavefunction_p_)
+        print(f"Final Chemical potential = {mu:.4e}")
+        return wavefunction, energy, mu
     return wavefunction, energy
 
 ########################################################################################################################

@@ -210,7 +210,7 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
 
         counter += 1
 
-    print("\n\nFinal current ground state energy = {:.4e}".format(energy))
+    print("\n\nFinal ground state energy = {:.4e}".format(energy))
     if get_mu:
         mu = get_chempot(wavefunction, wavefunction_p_)
         print(f"Final Chemical potential = {mu:.4e}")

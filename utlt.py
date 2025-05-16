@@ -103,14 +103,13 @@ class BEC:
         """
         return self.qatc(position) * self.L_x * 10 ** (-order)
 
-    def dimless_x(self, position):
+    def dimless_x(self, position, order=0):
         """
         Takes a physical quantity of some order of meters and converts them to dimensionless units
         :param int|float|np.ndarray position: Pass a point or np.array to be converted
-        :param int|float order: Specify the order, X, for 1eX meters. For example, to convert to micrometers, X=-6
-        :return: Position grid in Xm, where X is the order of the units you desire. Eg. nanometers = 1e-9 meters
+        :param int|float order: Specify the order, X, for 1eX meters. For example, to convert from micrometers, X=-6
         """
-        return self.qatc(position) / self.L_x
+        return self.qatc(position) / self.L_x * (10 ** order)
 
     def convert_time(self, time, order):
         """
@@ -119,14 +118,14 @@ class BEC:
         :param int|float order: Specify the order, X, with respect to seconds. Eg. for milliseconds, X=-3
         :return: Time point or time grid in order Xs, where X is the order of the units you want. Eg. nanoseconds, X=-9
         """
-        return self.qatc(time) * (10 ** -order) / self.omega_x
+        return (self.qatc(time) / self.omega_x) * (10 ** -order)
 
     def dimless_time(self, time, order):
         """
         Takes time in some order of seconds and converts it to dimensionless units
         :param int|float|np.ndarray time: Pass a point in time or np.array to be converted
         :param int|float order: Specify the order, X, with respect to seconds. Eg. for milliseconds, X=-3
-        :return: Time point or time grid in order Xs, where X is the order of the units you want. Eg. nanoseconds, X=-9
+        :return: Dimensionless Time point or time grid  converted from time of order X. Eg. nanoseconds, X=-9
         """
         return self.qatc(time) * self.omega_x * (10 ** order)
 

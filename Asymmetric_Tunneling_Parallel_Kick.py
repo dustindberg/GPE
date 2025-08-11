@@ -59,7 +59,7 @@ def replace(str1):
 ########################################################################################################################
 # Parameters needed for transfer to graphing file
 ########################################################################################################################
-kick = 6.5                      # initial momentum kick
+kick = 1                      # initial momentum kick
 propagation_dt = 3e-3           # dt for adaptive step
 eps = 5e-4                      # Error tolerance for adaptive step
 height_asymmetric = 46.         # Height parameter of asymmetric barrier
@@ -69,7 +69,7 @@ v_0 = 0.5                       # Coefficient for the trapping potential
 cooling_offset = 65.            # Center offset for cooling potential
 prob_region = 0.63              # For calculating probability
 prob_region_flipped = 1 - prob_region   # For calculating probability of the flipped case
-T = 10.5                        # Total time
+T = 2                           # Total time
 times = np.linspace(0, T, 500)  # Time grid
 x_amplitude = 150.              # Set the range for calculation
 x_grid_dim = 32 * 1024          # For faster testing: 8*1024, more accuracy: 32*1024, best blend: 16x32

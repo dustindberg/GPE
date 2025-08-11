@@ -7,7 +7,7 @@ from multiprocessing import cpu_count
 
 import os
 
-threads = 4
+threads = 16
 os.environ["OMP_NUM_THREADS"] = '{}'.format(threads)
 os.environ['NUMEXPR_MAX_THREADS'] = '{}'.format(threads)
 os.environ['NUMEXPR_NUM_THREADS'] = '{}'.format(threads)
@@ -211,10 +211,10 @@ def imag_time_gpe1D(*, x_grid_dim, x_amplitude, v, k, dt, g, init_wavefunction=N
         counter += 1
 
     print("\n\nFinal ground state energy = {:.4e}".format(energy))
-    if get_mu:
-        mu = get_chempot(wavefunction, wavefunction_p_)
-        print(f"Final Chemical potential = {mu:.4e}")
-        return wavefunction, energy, mu
+    #if get_mu:
+    #    mu = get_chempot(wavefunction, wavefunction_p_)
+    #    print(f"Final Chemical potential = {mu:.4e}")
+    #    return wavefunction, energy, mu
     return wavefunction, energy
 
 ########################################################################################################################
